@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SUNLENS
+Comment=Управление VPN-профилями и подписками
+Exec=sunlens
+Icon=sunlens
+Terminal=false
+Categories=Network;Qt;
+StartupWMClass=SUNLENS

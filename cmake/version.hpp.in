@@ -1,0 +1,7 @@
+#pragma once
+
+#include <QString>
+
+namespace sunlens {
+inline const QString Version = QStringLiteral("@PROJECT_VERSION@");
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="SUN LEN S">
+  <defs><linearGradient id="sun" x2="1" y2="1"><stop stop-color="#ff851b"/><stop offset="1" stop-color="#c42679"/></linearGradient></defs>
+  <rect width="256" height="256" rx="36" fill="url(#sun)"/>
+  <g fill="#fff" font-family="sans-serif" font-size="68" font-weight="900" letter-spacing="-3">
+    <text x="27" y="82">SUN</text><text x="27" y="153">LEN</text><text x="27" y="224">S</text>
+  </g>
+</svg>

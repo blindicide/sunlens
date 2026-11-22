@@ -1,0 +1,21 @@
+name: Release gates
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate tag before any release action
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          tag = os.environ["RELEASE_TAG"]
+          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?", tag):
+              raise SystemExit("Invalid SemVer tag")
+          raise SystemExit("Release blocked: license, installers and live TUN matrix are unverified. See docs/releasing.md.")
+          PY
