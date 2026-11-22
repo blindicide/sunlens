@@ -21,6 +21,9 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
 - `src/persistence/` — SQLite-профили, подписки и preferences.
 - `src/core/` — Linux sing-box config и проверка версии/хеша/схемы.
+- `src/tunnel/` — типизированные запросы, атомарный журнал и state machine.
+- `src/platform/linux/` — ограниченный helper и реальные сетевые операции.
+- `tests/integration/linux-tun.py` — изолированный live стенд с packet capture.
 - `dependencies.json` — закреплённый backend manifest; `tools/fetch-core.py` — developer acquisition.
 - `include/sunlens/` — backend-neutral модель и публичные API.
 - `assets/` — исходные SVG и desktop entry.
@@ -41,6 +44,9 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 `ApplicationController` предоставляет QML безопасные отображаемые поля и действия.
 `SingBoxAdapter::configuration()` генерирует JSON без изменения сети;
 `validate()` проверяет закреплённый executable и выполняет `sing-box check`.
+`TunnelManager::start()/stop()/recover()` управляют сетевой транзакцией;
+`RecoveryJournal` сохраняет lease до изменений; `LinuxTunnelPlatform` выбирает
+свободные ресурсы, запускает закреплённое ядро и освобождает только свой диапазон.
 
 Начните с `README.md` и `docs/milestones.md`. Успешный GUI smoke-test не
 подтверждает TUN, утечки или работоспособность установщика.

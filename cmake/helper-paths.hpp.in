@@ -1,0 +1,12 @@
+#pragma once
+
+#include <QString>
+
+namespace sunlens {
+inline const QString InstalledHelper =
+    QStringLiteral("@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/sunlens-tunnel-helper");
+inline const QString InstalledSingBox =
+    QStringLiteral("@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/cores/sing-box");
+inline const QString HelperStateDirectory = QStringLiteral("/var/lib/sunlens");
+inline const QString HelperRuntimeDirectory = QStringLiteral("/run/sunlens");
+}

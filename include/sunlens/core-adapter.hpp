@@ -15,11 +15,30 @@ struct RouteRule {
     bool direct = false;
 };
 
+struct DnsOptions {
+    QString address = QStringLiteral("1.1.1.1");
+    int port = 443;
+    bool https = true;
+    QString tlsName = QStringLiteral("cloudflare-dns.com");
+};
+
+struct TunParameters {
+    QString interfaceName = QStringLiteral("sunlens0");
+    QString ipv4Prefix = QStringLiteral("172.19.0.1/30");
+    QString ipv6Prefix = QStringLiteral("fdfe:dcba:9876::1/126");
+    int routeTable = 2022;
+    int rulePriority = 9000;
+    bool autoRedirect = true;
+    bool nativeDns = true;
+};
+
 struct CoreOptions {
     RoutingMode routing = RoutingMode::Proxy;
     bool bypassLan = true;
     bool ipv6 = true;
     QVector<RouteRule> rules;
+    DnsOptions dns;
+    TunParameters tunnel;
 };
 
 struct CoreCapabilities {

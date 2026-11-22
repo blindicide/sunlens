@@ -11,6 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
 include(GNUInstallDirs)
+if(UNIX AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Каталог установки" FORCE)
+endif()
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network Sql Concurrent)
 qt_standard_project_setup()
@@ -28,12 +31,30 @@ qt_add_library(sunlens-domain STATIC
     src/persistence/profile-repository.cpp
     src/app/application-controller.cpp
     src/core/sing-box-adapter.cpp
+    src/tunnel/tunnel-types.cpp
+    src/tunnel/recovery-journal.cpp
+    src/tunnel/tunnel-manager.cpp
+    include/sunlens/tunnel.hpp
     include/sunlens/subscription-manager.hpp
     include/sunlens/application-controller.hpp
 )
 target_include_directories(sunlens-domain PUBLIC include)
 target_include_directories(sunlens-domain PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(sunlens-domain PUBLIC Qt6::Core Qt6::Network Qt6::Sql Qt6::Concurrent)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    configure_file(cmake/helper-paths.hpp.in generated/sunlens/helper-paths.hpp @ONLY)
+    target_sources(sunlens-domain PRIVATE src/platform/linux/linux-tunnel-platform.cpp)
+    qt_add_executable(sunlens-tunnel-helper src/platform/linux/helper-main.cpp)
+    target_include_directories(sunlens-tunnel-helper PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    target_link_libraries(sunlens-tunnel-helper PRIVATE sunlens-domain)
+    configure_file(packaging/linux/org.sunlens.tunnel.policy.in org.sunlens.tunnel.policy @ONLY)
+    configure_file(packaging/linux/sunlens-recover.service.in sunlens-recover.service @ONLY)
+    install(TARGETS sunlens-tunnel-helper RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/sunlens")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/org.sunlens.tunnel.policy"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/polkit-1/actions")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sunlens-recover.service"
+        DESTINATION "lib/systemd/system")
+endif()
 
 qt_add_executable(sunlens src/app/main.cpp)
 target_include_directories(sunlens PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -69,7 +90,7 @@ if(BUILD_TESTING)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(NAME core-acquisition
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/test-fetch-core.py")
-    foreach(suite IN ITEMS profiles subscriptions core)
+    foreach(suite IN ITEMS profiles subscriptions core tunnel)
         qt_add_executable(test-${suite} tests/unit/test-${suite}.cpp)
         target_link_libraries(test-${suite} PRIVATE sunlens-domain Qt6::Test)
         add_test(NAME ${suite} COMMAND test-${suite})
@@ -82,6 +103,21 @@ if(BUILD_TESTING)
         add_test(NAME sing-box-validation COMMAND test-sing-box)
         set_tests_properties(sing-box-validation PROPERTIES TIMEOUT 120
             ENVIRONMENT "SUNLENS_SING_BOX_EXECUTABLE=${SUNLENS_SING_BOX_EXECUTABLE}")
+    endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        qt_add_executable(tunnel-test-driver tests/integration/tunnel-driver.cpp)
+        target_link_libraries(tunnel-test-driver PRIVATE sunlens-domain)
+        option(SUNLENS_ENABLE_NAMESPACE_TESTS "Живые тесты в отдельном user/network namespace" OFF)
+        if(SUNLENS_ENABLE_NAMESPACE_TESTS)
+            if(NOT SUNLENS_SING_BOX_EXECUTABLE)
+                message(FATAL_ERROR "Для живого теста требуется закреплённый sing-box")
+            endif()
+            add_test(NAME linux-live-tun COMMAND unshare --user --map-root-user --mount --net
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/linux-tun.py"
+                --core "${SUNLENS_SING_BOX_EXECUTABLE}" --driver "$<TARGET_FILE:tunnel-test-driver>"
+                --report "${CMAKE_CURRENT_BINARY_DIR}/evidence/linux-tun")
+            set_tests_properties(linux-live-tun PROPERTIES TIMEOUT 180 LABELS "live-tun;isolated")
+        endif()
     endif()
     add_test(NAME app-version COMMAND sunlens --version)
     set_tests_properties(app-version PROPERTIES PASS_REGULAR_EXPRESSION "SUNLENS ${PROJECT_VERSION}"

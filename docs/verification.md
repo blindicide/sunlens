@@ -39,3 +39,16 @@ cmake --preset dev -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-b
 Не выполнялись: Windows, живой HTTPS-провайдер, TUN любой ОС/ядра,
 проверка утечек, install/uninstall DEB/RPM/EXE, удалённый GitHub CI.
 Нет подтверждённого runtime-пакета, helper или разрешения лицензии.
+
+## Следующий этап: живой изолированный Linux TUN
+
+Реально выполнен `ctest --test-dir build/dev -R linux-live-tun --output-on-failure`.
+Успех: VLESS/sing-box, TCP4/TCP6/UDP4/UDP6, DNS через TUN, IPv6 disable,
+неверный UUID без direct fallback, disconnect, core SIGKILL и driver SIGKILL/recovery.
+Внешний tcpdump проверяет отсутствие открытых target/DNS пакетов на veth.
+До/после совпадают routes/rules изолированного клиента, включая чужие fixtures;
+отдельно подтверждено неизменное состояние routes/rules рабочего хоста.
+
+Это проверка TunnelManager/LinuxTunnelPlatform с настоящим ядром, **не**
+установленного polkit-помощника и не takeover системного resolver.
+Подробные команды, evidence и оставшиеся границы — `docs/linux-helper.md`.

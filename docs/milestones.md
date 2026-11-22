@@ -22,6 +22,10 @@
 - [ ] Транзакция маршрутов/DNS, восстановление и журнал crash recovery.
 - [ ] Cleanup временных секретов после SIGKILL GUI; выбор непересекающегося TUN subnet.
 - [ ] Реальный connect/disconnect/reconnect и внешняя проверка DNS/трафика.
+- [x] Изолированный live VLESS TUN: TCP/UDP × IPv4/IPv6, явный DNS, packet capture,
+  disconnect и crash recovery. Это частичная проверка, не закрытие M3 целиком.
+- [x] Код ограниченного pkexec-помощника, типизированный IPC и durable recovery journal.
+- [ ] Установленный polkit flow и системный resolver на чистой Linux VM.
 
 ## M4–M6 — матрица и безопасность
 - [ ] Windows/sing-box TUN.

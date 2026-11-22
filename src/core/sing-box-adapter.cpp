@@ -58,9 +58,14 @@ QJsonObject tlsOptions(const QString& name) {
 }
 
 QJsonObject doh(const QString& tag, const QString& detour) {
-    return {{"type", "https"},     {"tag", tag},
-            {"server", "1.1.1.1"}, {"path", "/dns-query"},
-            {"detour", detour},    {"tls", tlsOptions(QStringLiteral("cloudflare-dns.com"))}};
+    QJsonObject object{{"type", "https"},
+                       {"tag", tag},
+                       {"server", "1.1.1.1"},
+                       {"path", "/dns-query"},
+                       {"tls", tlsOptions(QStringLiteral("cloudflare-dns.com"))}};
+    if (detour != "direct")
+        object.insert("detour", detour);
+    return object;
 }
 
 QJsonObject outbound(const Node& node) {
@@ -120,6 +125,19 @@ CoreCapabilities SingBoxAdapter::capabilities() const {
 
 QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions& options) const {
     node.validate();
+    const auto& parameters = options.tunnel;
+    static const QRegularExpression name(QStringLiteral("^[a-zA-Z][a-zA-Z0-9_-]{0,14}$"));
+    if (!name.match(parameters.interfaceName).hasMatch() || parameters.routeTable < 256 ||
+        parameters.rulePriority < 1 || parameters.rulePriority > 32750 ||
+        QHostAddress::parseSubnet(parameters.ipv4Prefix).second != 30 ||
+        QHostAddress::parseSubnet(parameters.ipv6Prefix).second != 126)
+        throw Error(QStringLiteral("Неверные внутренние параметры TUN."));
+    QHostAddress resolver;
+    if (!resolver.setAddress(options.dns.address) || resolver.isNull() || resolver.isMulticast() ||
+        resolver.isLoopback() || options.dns.port < 1 || options.dns.port > 65535 ||
+        options.dns.tlsName.size() > 253 ||
+        options.dns.tlsName.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
+        throw Error(QStringLiteral("DNS требует IP-адрес, порт и корректное имя TLS."));
     if (options.routing != RoutingMode::Rules && !options.rules.isEmpty())
         throw Error(
             QStringLiteral("Пользовательские правила требуют режима маршрутизации по правилам."));
@@ -138,32 +156,41 @@ QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions&
         rules.append(ruleObject(rule));
     QJsonObject tun{{"type", "tun"},
                     {"tag", "tun-in"},
-                    {"interface_name", "sunlens0"},
-                    {"address", QJsonArray{"172.19.0.1/30", "fdfe:dcba:9876::1/126"}},
+                    {"interface_name", parameters.interfaceName},
+                    {"address", QJsonArray{parameters.ipv4Prefix, parameters.ipv6Prefix}},
                     {"mtu", 1500},
                     {"auto_route", true},
-                    {"auto_redirect", true},
+                    {"auto_redirect", parameters.autoRedirect},
+                    {"iproute2_table_index", parameters.routeTable},
+                    {"iproute2_rule_index", parameters.rulePriority},
                     {"strict_route", true},
-                    {"dns_mode", "hijack"}};
+                    {"dns_mode", parameters.nativeDns ? "hijack" : "disabled"}};
     if (options.bypassLan)
         tun.insert("route_exclude_address",
                    QJsonArray{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
                               "fc00::/7", "fe80::/10"});
     const bool direct = options.routing == RoutingMode::Direct;
-    return QJsonDocument(QJsonObject{
-        {"log", QJsonObject{{"disabled", true}}},
-        {"dns",
-         QJsonObject{{"servers", QJsonArray{doh("bootstrap", "direct"), doh("remote", "proxy")}},
-                     {"final", direct ? "bootstrap" : "remote"},
-                     {"strategy", options.ipv6 ? "prefer_ipv4" : "ipv4_only"},
-                     {"reverse_mapping", true}}},
-        {"inbounds", QJsonArray{tun}},
-        {"outbounds",
-         QJsonArray{outbound(node), QJsonObject{{"type", "direct"}, {"tag", "direct"}}}},
-        {"route", QJsonObject{{"auto_detect_interface", true},
-                              {"default_domain_resolver", "bootstrap"},
-                              {"final", direct ? "direct" : "proxy"},
-                              {"rules", rules}}}});
+    QJsonObject remote{{"tag", "remote"},
+                       {"type", options.dns.https ? "https" : "udp"},
+                       {"server", options.dns.address},
+                       {"server_port", options.dns.port}};
+    if (!direct)
+        remote.insert("detour", "proxy");
+    if (options.dns.https)
+        remote.insert("tls", tlsOptions(options.dns.tlsName));
+    return QJsonDocument(
+        QJsonObject{{"log", QJsonObject{{"disabled", true}}},
+                    {"dns", QJsonObject{{"servers", QJsonArray{doh("bootstrap", "direct"), remote}},
+                                        {"final", "remote"},
+                                        {"strategy", options.ipv6 ? "prefer_ipv4" : "ipv4_only"},
+                                        {"reverse_mapping", true}}},
+                    {"inbounds", QJsonArray{tun}},
+                    {"outbounds", QJsonArray{outbound(node),
+                                             QJsonObject{{"type", "direct"}, {"tag", "direct"}}}},
+                    {"route", QJsonObject{{"auto_detect_interface", true},
+                                          {"default_domain_resolver", "bootstrap"},
+                                          {"final", direct ? "direct" : "proxy"},
+                                          {"rules", rules}}}});
 }
 
 ValidationResult SingBoxAdapter::validate(const QString& executable,

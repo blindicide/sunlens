@@ -13,9 +13,14 @@
 - Генерация Linux TUN-конфигурации четырёх протоколов и режимов proxy/direct/rules.
 - Асинхронная проверка настоящим sing-box из GUI, без запуска VPN.
 - Реальные неповышенные проверки 15 конфигураций и clang static analyzer в Linux CI.
+- Ограниченный Linux helper, polkit policy, закрытый pipe IPC и durable recovery journal.
+- TunnelManager с timeout, откатом и восстановлением после аварий ядра/помощника.
+- Изолированные live VLESS TUN-тесты TCP/UDP/IPv4/IPv6/DNS с внешним packet capture.
 
 ### Changed
 ### Fixed
+- DNS startup sing-box: удалён недопустимый detour к пустому direct outbound,
+  который принимался check-командой, но блокировал настоящий запуск.
 ### Security
 - HTTPS без отключения TLS и без автоматических redirects/cookies.
 - Закрытые Unix-права данных, запрет root GUI и отсутствие секретов в view model.

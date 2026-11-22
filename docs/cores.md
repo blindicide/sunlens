@@ -2,8 +2,9 @@
 
 `ICoreAdapter` определяет capabilities, генерацию конфигурации и её проверку.
 `SingBoxAdapter` реализует эти операции для Linux-конфигурации sing-box 1.14.4.
-Запуск работающего TUN-процесса, helper, lifecycle supervisor и XrayAdapter
-ещё не реализованы. Capabilities явно возвращают verifiedTun=false и
+Запуск Linux TUN через отдельный helper реализован и частично проверен в
+изолированном VLESS-стенде; GUI пока не подключён к IPC. XrayAdapter отсутствует.
+Полная матрица ещё не проверена. Capabilities явно возвращают verifiedTun=false и
 trafficCounters=false. Отсутствующий Xray не заменён заглушкой с фиктивным успехом.
 
 ## Закрепление
@@ -28,9 +29,9 @@ bundling нужны отдельная проверка runtime-ресурсов
 - Режимы proxy/direct/rules; exact domain, domain suffix, IP/CIDR.
 - Опциональный LAN bypass; IPv6 захватывается и отвергается правилом, когда
   выключен, вместо заведомого оставления IPv6 вне конфигурации туннеля.
-- DoH через proxy для пользовательских DNS; отдельный direct DoH bootstrap
-  для имени upstream. Пока адрес 1.1.1.1 / cloudflare-dns.com фиксирован.
-  Настройка провайдера DNS — незавершённая задача.
+- DNS (HTTPS либо UDP) и IP/порт/TLS name передаются типизированно; bootstrap
+  имени upstream остаётся отдельным direct DoH 1.1.1.1 / cloudflare-dns.com.
+  GUI-настройка DNS — незавершённая задача.
 - Логи ядра выключены; фактических счётчиков трафика пока нет.
 
 Это только проверенная схема JSON. Конфликты адресов TUN, правила nftables,

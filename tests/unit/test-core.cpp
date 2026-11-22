@@ -63,6 +63,9 @@ class CoreTests : public QObject {
         QCOMPARE(config["route"].toObject()["final"].toString(), QStringLiteral("direct"));
         QVERIFY(!config["inbounds"].toArray().first().toObject().contains("route_exclude_address"));
         QCOMPARE(config["dns"].toObject()["strategy"].toString(), QStringLiteral("ipv4_only"));
+        const auto servers = config["dns"].toObject()["servers"].toArray();
+        QVERIFY(!servers[0].toObject().contains("detour"));
+        QVERIFY(!servers[1].toObject().contains("detour"));
         const auto rules = config["route"].toObject()["rules"].toArray();
         QCOMPARE(rules.first().toObject()["ip_version"].toInt(), 6);
         QCOMPARE(rules.first().toObject()["action"].toString(), QStringLiteral("reject"));
