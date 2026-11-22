@@ -18,6 +18,9 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 
 - `src/app/main.cpp` — запуск Qt, версия, проверка загрузки QML.
 - `qml/Main.qml` — интерфейс и явное состояние недоступности TUN.
+- `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
+- `src/persistence/` — SQLite-профили, подписки и preferences.
+- `include/sunlens/` — backend-neutral модель и публичные API.
 - `assets/` — исходные SVG и desktop entry.
 - `cmake/version.hpp.in` — версия из единственного источника `VERSION`.
 - `tests/` — автоматические проверки по мере реализации.
@@ -28,6 +31,12 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 
 `main()` запускает GUI; `--version` выводит версию; `--smoke-test` загружает
 интерфейс и завершает процесс с ошибкой при невозможности загрузки.
+
+`ProfileParser::parse()` валидирует документ целиком. `Node::fingerprint()`
+даёт идентичность без отображаемой метки. `ProfileRepository::replaceNodes()`
+заменяет подписку атомарно с сохранением ID и пользовательских меток.
+`SubscriptionManager::fetch()/refresh()/cancel()` управляют ограниченным HTTP.
+`ApplicationController` предоставляет QML безопасные отображаемые поля и действия.
 
 Начните с `README.md` и `docs/milestones.md`. Успешный GUI smoke-test не
 подтверждает TUN, утечки или работоспособность установщика.

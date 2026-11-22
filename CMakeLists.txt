@@ -16,9 +16,20 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network S
 qt_standard_project_setup()
 configure_file(cmake/version.hpp.in generated/sunlens/version.hpp @ONLY)
 
+qt_add_library(sunlens-domain STATIC
+    src/subscriptions/profile.cpp
+    src/subscriptions/subscription-manager.cpp
+    src/persistence/profile-repository.cpp
+    src/app/application-controller.cpp
+    include/sunlens/subscription-manager.hpp
+    include/sunlens/application-controller.hpp
+)
+target_include_directories(sunlens-domain PUBLIC include)
+target_link_libraries(sunlens-domain PUBLIC Qt6::Core Qt6::Network Qt6::Sql)
+
 qt_add_executable(sunlens src/app/main.cpp)
 target_include_directories(sunlens PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(sunlens PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(sunlens PRIVATE sunlens-domain Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 qt_add_qml_module(sunlens
     URI Sunlens
     VERSION 1.0
@@ -40,6 +51,13 @@ install(FILES VERSION LICENSE third_party/NOTICE.md
     DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
 
 if(BUILD_TESTING)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    foreach(suite IN ITEMS profiles subscriptions)
+        qt_add_executable(test-${suite} tests/unit/test-${suite}.cpp)
+        target_link_libraries(test-${suite} PRIVATE sunlens-domain Qt6::Test)
+        add_test(NAME ${suite} COMMAND test-${suite})
+        set_tests_properties(${suite} PROPERTIES TIMEOUT 45)
+    endforeach()
     add_test(NAME app-version COMMAND sunlens --version)
     set_tests_properties(app-version PROPERTIES PASS_REGULAR_EXPRESSION "SUNLENS ${PROJECT_VERSION}"
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
