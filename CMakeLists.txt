@@ -34,7 +34,9 @@ qt_add_library(sunlens-domain STATIC
     src/tunnel/tunnel-types.cpp
     src/tunnel/recovery-journal.cpp
     src/tunnel/tunnel-manager.cpp
+    src/tunnel/helper-client.cpp
     include/sunlens/tunnel.hpp
+    include/sunlens/tunnel-client.hpp
     include/sunlens/subscription-manager.hpp
     include/sunlens/application-controller.hpp
 )

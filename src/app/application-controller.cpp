@@ -7,11 +7,25 @@ namespace sunlens {
 
 ApplicationController::ApplicationController(ProfileRepository& repository,
                                              std::shared_ptr<const ICoreAdapter> adapter,
-                                             QObject* parent)
-    : QObject(parent), repository_(repository), manager_(repository), adapter_(std::move(adapter)) {
+                                             QObject* parent, std::unique_ptr<ITunnelClient> tunnel)
+    : QObject(parent), repository_(repository), manager_(repository), adapter_(std::move(adapter)),
+      tunnel_(tunnel ? std::move(tunnel) : std::make_unique<HelperClient>()) {
     if (!adapter_)
         throw Error(QStringLiteral("Не задан адаптер ядра."));
     corePath_ = repository_.preference(QStringLiteral("sing-box-path"));
+    connect(tunnel_.get(), &ITunnelClient::statusReceived, this, [this](const QJsonObject& status) {
+        tunnelState_ = status["state"].toString();
+        tunnelMessage_ = status["message"].toString();
+        tunnelCounters_ = QVariantMap{{"available", status["countersAvailable"].toBool()},
+                                      {"upload", status["upload"].toString()},
+                                      {"download", status["download"].toString()},
+                                      {"source", status["counterSource"].toString()}};
+        emit tunnelChanged();
+        if (quitRequested_ && tunnelState_ == "idle") {
+            quitRequested_ = false;
+            emit quitReady();
+        }
+    });
     connect(&validation_, &QFutureWatcher<ValidationResult>::finished, this, [this] {
         const auto result = validation_.result();
         coreBusy_ = false;
@@ -39,6 +53,14 @@ bool ApplicationController::busy() const { return manager_.busy(); }
 bool ApplicationController::coreBusy() const { return coreBusy_; }
 QString ApplicationController::corePath() const { return corePath_; }
 QString ApplicationController::coreStatus() const { return coreStatus_; }
+bool ApplicationController::tunnelAvailable() const { return tunnel_->available(); }
+QString ApplicationController::tunnelState() const { return tunnelState_; }
+QString ApplicationController::tunnelMessage() const { return tunnelMessage_; }
+QVariantMap ApplicationController::tunnelCounters() const { return tunnelCounters_; }
+bool ApplicationController::tunnelActive() const {
+    return QStringList{"authorizing", "starting", "ready", "stopping", "recovery-required"}
+        .contains(tunnelState_);
+}
 
 void ApplicationController::setMessage(const QString& text) {
     message_ = text;
@@ -127,6 +149,10 @@ void ApplicationController::fetchSubscription(const QString& url, const QString&
 void ApplicationController::refreshSubscription(const QString& id) { manager_.refresh(id); }
 void ApplicationController::cancelFetch() { manager_.cancel(); }
 void ApplicationController::selectServer(const QString& id) {
+    if (tunnelActive() && id != selectedId_) {
+        setMessage(QStringLiteral("Сначала отключите TUN, затем выберите другой сервер."));
+        return;
+    }
     try {
         for (const auto& server : repository_.servers()) {
             if (server.id == id) {
@@ -189,6 +215,48 @@ void ApplicationController::validateSelectedCore(const QString& executable, bool
     } catch (const Error& error) {
         setMessage(QString::fromUtf8(error.what()));
     }
+}
+
+void ApplicationController::startTunnel(int routing, bool bypassLan, bool ipv6,
+                                        const QString& dnsAddress, int dnsPort, bool dnsHttps,
+                                        const QString& dnsTlsName) {
+    if (tunnelActive()) {
+        setMessage(QStringLiteral("Текущий TUN нужно отключить или восстановить."));
+        return;
+    }
+    try {
+        for (const auto& server : repository_.servers()) {
+            if (server.id != selectedId_)
+                continue;
+            TunnelRequest request;
+            request.serverId = server.id;
+            request.subscriptionId = server.subscriptionId;
+            request.node = server.node;
+            if (routing < 0 || routing > 1)
+                throw Error(QStringLiteral("Выберите поддержанный режим маршрутизации."));
+            request.options.routing = static_cast<RoutingMode>(routing);
+            request.options.bypassLan = bypassLan;
+            request.options.ipv6 = ipv6;
+            request.options.dns = {dnsAddress.trimmed(), dnsPort, dnsHttps, dnsTlsName.trimmed()};
+            (void)TunnelRequest::fromJson(request.toJson());
+            tunnel_->start(request);
+            return;
+        }
+        throw Error(QStringLiteral("Выберите существующий сервер перед подключением."));
+    } catch (const Error& error) {
+        setMessage(QString::fromUtf8(error.what()));
+    }
+}
+
+void ApplicationController::stopTunnel() { tunnel_->stop(); }
+void ApplicationController::recoverTunnel() { tunnel_->recover(); }
+void ApplicationController::disconnectAndQuit() {
+    if (!tunnelActive()) {
+        emit quitReady();
+        return;
+    }
+    quitRequested_ = true;
+    tunnel_->stop();
 }
 
 } // namespace sunlens

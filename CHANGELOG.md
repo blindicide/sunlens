@@ -16,12 +16,17 @@
 - Ограниченный Linux helper, polkit policy, закрытый pipe IPC и durable recovery journal.
 - TunnelManager с timeout, откатом и восстановлением после аварий ядра/помощника.
 - Изолированные live VLESS TUN-тесты TCP/UDP/IPv4/IPv6/DNS с внешним packet capture.
+- GUI Connect/Disconnect/Recover через установленный helper с отдельным подтверждением polkit.
+- Различение готовности TUN и неподтверждённой доступности сервера, живые L3-счётчики.
+- Настройки DNS и подтверждение отключения перед выходом из GUI.
 
 ### Changed
 ### Fixed
 - DNS startup sing-box: удалён недопустимый detour к пустому direct outbound,
   который принимался check-командой, но блокировал настоящий запуск.
 ### Security
+- Credentials отправляются помощнику только после авторизованного handshake;
+  текстовый внутренний агент pkexec отключён, developer-путь для elevation запрещён.
 - HTTPS без отключения TLS и без автоматических redirects/cookies.
 - Закрытые Unix-права данных, запрет root GUI и отсутствие секретов в view model.
 - Отказ от неподтверждённого ядра, закрытые временные config-файлы и ограниченный вывод QProcess.

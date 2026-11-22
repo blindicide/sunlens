@@ -12,7 +12,35 @@ namespace {
 const QByteArray Vless =
     "vless://11223344-5566-4788-99aa-bbccddeeff00@example.invalid:443"
     "?encryption=none&security=tls&type=ws&sni=example.invalid&path=%2Fvpn#Fixture";
-}
+
+class RecordingTunnelClient final : public ITunnelClient {
+  public:
+    int starts = 0;
+    int stops = 0;
+    TunnelRequest request;
+    bool available() const override { return true; }
+    void publish(const QString& state) {
+        emit statusReceived(QJsonObject{{"schema", 1},
+                                        {"state", state},
+                                        {"message", "Fixture"},
+                                        {"reachability", "unverified"},
+                                        {"countersAvailable", state == "ready"},
+                                        {"counterSource", "tun-l3"},
+                                        {"upload", "123"},
+                                        {"download", "456"}});
+    }
+    void start(const TunnelRequest& value) override {
+        ++starts;
+        request = value;
+        publish("starting");
+    }
+    void stop() override {
+        ++stops;
+        publish("idle");
+    }
+    void recover() override { publish("idle"); }
+};
+} // namespace
 
 class ProfileTests : public QObject {
     Q_OBJECT
@@ -200,6 +228,34 @@ class ProfileTests : public QObject {
         QTRY_VERIFY(!controller.coreBusy());
         QVERIFY(!controller.coreStatus().isEmpty());
         QCOMPARE(repository.preference("sing-box-path"), QStringLiteral("/missing/core"));
+    }
+    void controllerUsesHelperWithoutInventingReachability() {
+        QTemporaryDir directory;
+        ProfileRepository repository(directory.filePath("profiles.sqlite"));
+        auto client = std::make_unique<RecordingTunnelClient>();
+        auto* observed = client.get();
+        ApplicationController controller(repository, std::make_shared<SingBoxAdapter>(), nullptr,
+                                         std::move(client));
+        controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");
+        QCOMPARE(observed->starts, 0);
+        QVERIFY(controller.importText(QString::fromUtf8(Vless)));
+        controller.selectServer(controller.servers().first().toMap()["id"].toString());
+        controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");
+        QCOMPARE(observed->starts, 1);
+        QCOMPARE(observed->request.serverId, controller.selectedId());
+        QVERIFY(controller.tunnelActive());
+        QCOMPARE(controller.tunnelState(), QStringLiteral("starting"));
+        observed->publish("ready");
+        QCOMPARE(controller.tunnelState(), QStringLiteral("ready"));
+        QVERIFY(controller.tunnelCounters()["available"].toBool());
+        QCOMPARE(controller.tunnelCounters()["upload"].toString(), QStringLiteral("123"));
+        controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");
+        QCOMPARE(observed->starts, 1);
+        QSignalSpy quit(&controller, &ApplicationController::quitReady);
+        controller.disconnectAndQuit();
+        QCOMPARE(observed->stops, 1);
+        QVERIFY(!controller.tunnelActive());
+        QCOMPARE(quit.size(), 1);
     }
 };
 

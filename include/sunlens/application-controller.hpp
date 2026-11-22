@@ -2,6 +2,7 @@
 
 #include "sunlens/core-adapter.hpp"
 #include "sunlens/subscription-manager.hpp"
+#include "sunlens/tunnel-client.hpp"
 
 #include <QFutureWatcher>
 #include <QVariantList>
@@ -19,11 +20,16 @@ class ApplicationController : public QObject {
     Q_PROPERTY(bool coreBusy READ coreBusy NOTIFY coreInfoChanged)
     Q_PROPERTY(QString corePath READ corePath NOTIFY coreInfoChanged)
     Q_PROPERTY(QString coreStatus READ coreStatus NOTIFY coreInfoChanged)
+    Q_PROPERTY(bool tunnelAvailable READ tunnelAvailable CONSTANT)
+    Q_PROPERTY(QString tunnelState READ tunnelState NOTIFY tunnelChanged)
+    Q_PROPERTY(QString tunnelMessage READ tunnelMessage NOTIFY tunnelChanged)
+    Q_PROPERTY(bool tunnelActive READ tunnelActive NOTIFY tunnelChanged)
+    Q_PROPERTY(QVariantMap tunnelCounters READ tunnelCounters NOTIFY tunnelChanged)
   public:
     explicit ApplicationController(
         ProfileRepository& repository,
         std::shared_ptr<const ICoreAdapter> adapter = std::make_shared<SingBoxAdapter>(),
-        QObject* parent = nullptr);
+        QObject* parent = nullptr, std::unique_ptr<ITunnelClient> tunnel = nullptr);
     [[nodiscard]] QVariantList servers() const;
     [[nodiscard]] QVariantList subscriptions() const;
     [[nodiscard]] QString selectedId() const;
@@ -32,6 +38,11 @@ class ApplicationController : public QObject {
     [[nodiscard]] bool coreBusy() const;
     [[nodiscard]] QString corePath() const;
     [[nodiscard]] QString coreStatus() const;
+    [[nodiscard]] bool tunnelAvailable() const;
+    [[nodiscard]] QString tunnelState() const;
+    [[nodiscard]] QString tunnelMessage() const;
+    [[nodiscard]] bool tunnelActive() const;
+    [[nodiscard]] QVariantMap tunnelCounters() const;
 
     Q_INVOKABLE bool importText(const QString& text);
     Q_INVOKABLE bool addManual(const QString& protocol, const QString& host, int port,
@@ -44,12 +55,19 @@ class ApplicationController : public QObject {
     Q_INVOKABLE void renameServer(const QString& id, const QString& label);
     Q_INVOKABLE void validateSelectedCore(const QString& executable, bool direct, bool bypassLan,
                                           bool ipv6);
+    Q_INVOKABLE void startTunnel(int routing, bool bypassLan, bool ipv6, const QString& dnsAddress,
+                                 int dnsPort, bool dnsHttps, const QString& dnsTlsName);
+    Q_INVOKABLE void stopTunnel();
+    Q_INVOKABLE void recoverTunnel();
+    Q_INVOKABLE void disconnectAndQuit();
 
   signals:
     void profilesChanged();
     void messageChanged();
     void busyChanged();
     void coreInfoChanged();
+    void tunnelChanged();
+    void quitReady();
 
   private:
     void reload();
@@ -67,6 +85,11 @@ class ApplicationController : public QObject {
     QString corePath_;
     QString coreStatus_ = QStringLiteral("Ядро ещё не проверено. TUN не реализован.");
     bool coreBusy_ = false;
+    std::unique_ptr<ITunnelClient> tunnel_;
+    QString tunnelState_ = QStringLiteral("idle");
+    QString tunnelMessage_ = QStringLiteral("Не подключено. Запрос изменения сети не отправлялся.");
+    QVariantMap tunnelCounters_;
+    bool quitRequested_ = false;
 };
 
 } // namespace sunlens

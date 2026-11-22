@@ -22,6 +22,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `src/persistence/` — SQLite-профили, подписки и preferences.
 - `src/core/` — Linux sing-box config и проверка версии/хеша/схемы.
 - `src/tunnel/` — типизированные запросы, атомарный журнал и state machine.
+- `src/tunnel/helper-client.cpp` — ограниченный GUI IPC-клиент с авторизованным handshake.
 - `src/platform/linux/` — ограниченный helper и реальные сетевые операции.
 - `tests/integration/linux-tun.py` — изолированный live стенд с packet capture.
 - `dependencies.json` — закреплённый backend manifest; `tools/fetch-core.py` — developer acquisition.
