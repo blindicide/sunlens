@@ -162,6 +162,20 @@ class SubscriptionTests : public QObject {
         QTRY_COMPARE(failed.size(), 1);
         QCOMPARE(requests, 1);
     }
+    void destructionDuringFetch() {
+        QTemporaryDir directory;
+        ProfileRepository repository(directory.filePath("profiles.sqlite"));
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        onRequest(server, [](QTcpSocket*) {});
+        auto manager =
+            std::make_unique<SubscriptionManager>(repository, FetchPolicy{2000, 0, 4096, true});
+        manager->fetch(QString("http://127.0.0.1:%1/list").arg(server.serverPort()), "Fixture");
+        QVERIFY(manager->busy());
+        manager.reset();
+        QCoreApplication::processEvents();
+        QVERIFY(repository.servers().isEmpty());
+    }
 };
 
 QTEST_GUILESS_MAIN(SubscriptionTests)

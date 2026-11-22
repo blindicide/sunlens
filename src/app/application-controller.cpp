@@ -1,11 +1,23 @@
 #include "sunlens/application-controller.hpp"
 
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace sunlens {
 
-ApplicationController::ApplicationController(ProfileRepository& repository, QObject* parent)
-    : QObject(parent), repository_(repository), manager_(repository) {
+ApplicationController::ApplicationController(ProfileRepository& repository,
+                                             std::shared_ptr<const ICoreAdapter> adapter,
+                                             QObject* parent)
+    : QObject(parent), repository_(repository), manager_(repository), adapter_(std::move(adapter)) {
+    if (!adapter_)
+        throw Error(QStringLiteral("Не задан адаптер ядра."));
+    corePath_ = repository_.preference(QStringLiteral("sing-box-path"));
+    connect(&validation_, &QFutureWatcher<ValidationResult>::finished, this, [this] {
+        const auto result = validation_.result();
+        coreBusy_ = false;
+        coreStatus_ = result.message;
+        emit coreInfoChanged();
+    });
     connect(&manager_, &SubscriptionManager::busyChanged, this,
             &ApplicationController::busyChanged);
     connect(&manager_, &SubscriptionManager::failed, this, [this](const QString& error) {
@@ -24,6 +36,9 @@ QVariantList ApplicationController::subscriptions() const { return subscriptions
 QString ApplicationController::selectedId() const { return selectedId_; }
 QString ApplicationController::message() const { return message_; }
 bool ApplicationController::busy() const { return manager_.busy(); }
+bool ApplicationController::coreBusy() const { return coreBusy_; }
+QString ApplicationController::corePath() const { return corePath_; }
+QString ApplicationController::coreStatus() const { return coreStatus_; }
 
 void ApplicationController::setMessage(const QString& text) {
     message_ = text;
@@ -129,6 +144,48 @@ void ApplicationController::renameServer(const QString& id, const QString& label
     try {
         repository_.setLabel(id, label);
         reload();
+    } catch (const Error& error) {
+        setMessage(QString::fromUtf8(error.what()));
+    }
+}
+
+void ApplicationController::validateSelectedCore(const QString& executable, bool direct,
+                                                 bool bypassLan, bool ipv6) {
+    if (coreBusy_) {
+        setMessage(QStringLiteral("Дождитесь окончания проверки ядра."));
+        return;
+    }
+    try {
+        std::optional<Node> selected;
+        for (const auto& server : repository_.servers()) {
+            if (server.id == selectedId_) {
+                selected = server.node;
+                break;
+            }
+        }
+        if (!selected)
+            throw Error(QStringLiteral("Сначала выберите сервер на вкладке профилей."));
+        CoreOptions options;
+        options.routing = direct ? RoutingMode::Direct : RoutingMode::Proxy;
+        options.bypassLan = bypassLan;
+        options.ipv6 = ipv6;
+        const auto config = adapter_->configuration(*selected, options);
+        corePath_ = executable.trimmed();
+        repository_.setPreference(QStringLiteral("sing-box-path"), corePath_);
+        coreBusy_ = true;
+        coreStatus_ =
+            QStringLiteral("Проверка SHA-256, версии и конфигурации. Сеть не изменяется.");
+        emit coreInfoChanged();
+        const auto adapter = adapter_;
+        const auto path = corePath_;
+        validation_.setFuture(QtConcurrent::run([adapter, path, config] {
+            try {
+                return adapter->validate(path, config);
+            } catch (...) {
+                return ValidationResult{
+                    false, QStringLiteral("Не удалось завершить проверку ядра."), {}};
+            }
+        }));
     } catch (const Error& error) {
         setMessage(QString::fromUtf8(error.what()));
     }

@@ -3,6 +3,8 @@
 Минимум: CMake 3.24, Ninja, C++20, Qt 6.4. Модули: Core, Gui, Qml,
 Quick, QuickControls2, Network, Sql и Test. SQLite driver и runtime QML-модули
 обязательны; одной библиотеки Qt Core недостаточно.
+Для асинхронной проверки ядра также используется Qt Concurrent.
+Для developer tools и тестов загрузки нужен Python 3 (не runtime-зависимость GUI).
 
 Ubuntu 24.04 / Linux Mint 22:
 
@@ -20,5 +22,5 @@ Windows: MSVC 2022 x64, Ninja и Qt MSVC x64; запускайте те же CMa
 в Developer Command Prompt с Qt в `CMAKE_PREFIX_PATH`. Windows локально
 не проверен. Приложение не требует прав администратора.
 
-Headless Linux: `QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software`.
+Headless Linux: `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`.
 `--smoke-test` не изменяет сеть и не открывает реальный туннель.

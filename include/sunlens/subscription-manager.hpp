@@ -4,7 +4,6 @@
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
-#include <QPointer>
 #include <QTimer>
 
 namespace sunlens {
@@ -21,6 +20,7 @@ class SubscriptionManager : public QObject {
   public:
     explicit SubscriptionManager(ProfileRepository& repository, FetchPolicy policy = {},
                                  QObject* parent = nullptr);
+    ~SubscriptionManager() override;
     [[nodiscard]] bool busy() const;
     void fetch(const QString& url, const QString& name);
     void refresh(const QString& id);
@@ -42,7 +42,7 @@ class SubscriptionManager : public QObject {
     ProfileRepository& repository_;
     FetchPolicy policy_;
     QNetworkAccessManager network_;
-    QPointer<QNetworkReply> reply_;
+    QNetworkReply* reply_ = nullptr;
     QTimer deadline_;
     QTimer retry_;
     QString id_;

@@ -110,6 +110,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             highlighted: controller.selectedId === modelData.id
+                            enabled: !controller.coreBusy
                             onClicked: controller.selectServer(modelData.id)
                             Accessible.description: "Выбрать сервер; подключение не выполняется"
                         }
@@ -268,17 +269,52 @@ ApplicationWindow {
                         }
                     }
                 }
-                ScrollView {
-                    clip: true
-                    TextArea {
-                        readOnly: true
-                        wrapMode: TextEdit.Wrap
-                        text: "SUNLENS " + appVersion
-                              + "\nTUN: не реализован"
-                              + "\nsing-box / Xray: пока не проверены"
-                              + "\nСчётчики трафика: недоступны, измерения не ведутся"
-                              + "\nКритерии выпуска v1.0.0 не выполнены."
-                        Accessible.name: "Состояние компонентов"
+                ColumnLayout {
+                    Label { text: "Проверка sing-box · Linux x86_64"; font.bold: true }
+                    TextField {
+                        id: coreExecutable
+                        Layout.fillWidth: true
+                        text: controller.corePath
+                        placeholderText: "Абсолютный путь к закреплённому sing-box"
+                        Accessible.name: placeholderText
+                    }
+                    ComboBox {
+                        id: routing
+                        model: ["Весь трафик через прокси", "Прямое подключение"]
+                        Accessible.name: "Режим конфигурации для проверки"
+                    }
+                    RowLayout {
+                        CheckBox { id: lan; text: "Доступ к локальной сети"; checked: true }
+                        CheckBox { id: ipv6; text: "IPv6"; checked: true }
+                    }
+                    Button {
+                        text: controller.coreBusy ? "Проверка…" : "Проверить конфигурацию"
+                        enabled: !controller.coreBusy && controller.selectedId.length > 0
+                        onClicked: controller.validateSelectedCore(coreExecutable.text,
+                            routing.currentIndex === 1, lan.checked, ipv6.checked)
+                    }
+                    Label {
+                        text: controller.coreStatus
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        Accessible.name: "Результат проверки ядра: " + text
+                    }
+                    ScrollView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        TextArea {
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            text: "SUNLENS " + appVersion
+                                  + "\nQt " + qtVersion
+                                  + "\nTUN: не реализован. Проверка не запускает VPN."
+                                  + "\nXray: адаптер ещё не реализован"
+                                  + "\nСчётчики трафика: недоступны, измерения не ведутся"
+                                  + "\nКритерии выпуска v1.0.0 не выполнены."
+                            Accessible.name: "Состояние компонентов"
+                        }
                     }
                 }
             }

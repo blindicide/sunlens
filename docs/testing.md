@@ -15,6 +15,18 @@ ctest --preset dev
 успех/ошибочный refresh, retry, announced/streaming oversize, timeout, cancel,
 небезопасные URL и запрет redirects. Это не проверка живого HTTPS-провайдера.
 
+`core` проверяет перевод настроек, отказ от неподдержанных rules и недоверенного
+executable. Опциональный `sing-box-validation` выполняет настоящий `sing-box check`
+для 5 protocol/transport fixtures × 3 режима маршрутизации и проверяет отказ
+на неверной схеме без вывода секретов. Fixtures используют `.invalid` / TEST-NET.
+Сетевые подключения к VPN endpoint в этой suite не выполняются.
+`core-acquisition` проверяет cache, hash mismatch, запрет tar symlink/traversal
+и сохранение существующего неизвестного файла, без внешней сети.
+
+`python3 tools/check-static.py --build-directory build/dev` запускает clang static
+analyzer по compilation database. Требуется clang-tidy с C++20 и установленной
+стандартной библиотекой выбранного компилятора.
+
 Для каждого будущего релиза сохраняйте точный commit, версии ОС/Qt/ядер,
 вывод install/run/uninstall и результаты Windows/Linux × sing-box/Xray.
 Живая проверка должна наблюдать внешний интерфейс (DNS/IPv4/IPv6/TCP/UDP),

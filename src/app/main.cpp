@@ -51,14 +51,19 @@ int main(int argc, char* argv[]) {
             throw sunlens::Error(QStringLiteral("Не удалось создать закрытый каталог данных."));
         sunlens::ProfileRepository repository(directory + QStringLiteral("/profiles.sqlite"));
         sunlens::ApplicationController controller(repository);
+        bool qmlWarnings = false;
         QQmlApplicationEngine engine;
+        QObject::connect(&engine, &QQmlEngine::warnings, &app,
+                         [&qmlWarnings] { qmlWarnings = true; });
         engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), sunlens::Version);
+        engine.rootContext()->setContextProperty(QStringLiteral("qtVersion"),
+                                                 QString::fromLatin1(qVersion()));
         engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Sunlens/qml/Main.qml")));
         if (engine.rootObjects().isEmpty())
             return 1;
         if (parser.isSet(QStringLiteral("smoke-test")))
-            QTimer::singleShot(250, &app, &QCoreApplication::quit);
+            QTimer::singleShot(250, &app, [&app, &qmlWarnings] { app.exit(qmlWarnings ? 1 : 0); });
         return app.exec();
     } catch (const sunlens::Error& error) {
         qCritical("%s", error.what());

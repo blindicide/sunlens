@@ -1,6 +1,7 @@
 """Проверки метаданных и явно опасных секретов перед сборкой."""
 
 import pathlib
+import json
 import re
 import subprocess
 
@@ -27,3 +28,13 @@ for name in ("LICENSE", "third_party/NOTICE.md", "OVERVIEW.md", "CHANGELOG.md"):
     if not (root / name).is_file():
         raise SystemExit(f"Отсутствует обязательный файл: {name}")
 print(f"Метаданные {version}: OK; базовая проверка секретов: OK")
+dependencies = json.loads((root / "dependencies.json").read_text(encoding="utf-8"))
+qt_version = dependencies["qt"]["ciVersion"]
+workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+if f"version: '{qt_version}'" not in workflow:
+    raise SystemExit("Версия Qt CI расходится с dependency manifest.")
+asset = dependencies["cores"]["sing-box"]["assets"]["linux-amd64"]
+for key in ("archiveSha256", "binarySha256"):
+    if not re.fullmatch("[0-9a-f]{64}", asset[key]):
+        raise SystemExit("Некорректное закрепление SHA-256.")
+print("Dependency manifest и версия Qt CI: OK; лицензионный выпуск остаётся заблокирован.")

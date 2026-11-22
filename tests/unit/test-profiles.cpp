@@ -188,6 +188,19 @@ class ProfileTests : public QObject {
                                      ""));
         QCOMPARE(controller.servers().size(), 2);
     }
+    void controllerValidationRemainsDisconnected() {
+        QTemporaryDir directory;
+        ProfileRepository repository(directory.filePath("profiles.sqlite"));
+        ApplicationController controller(repository);
+        controller.validateSelectedCore("/missing/core", false, true, true);
+        QVERIFY(!controller.coreBusy());
+        QVERIFY(controller.importText(QString::fromUtf8(Vless)));
+        controller.selectServer(controller.servers().first().toMap()["id"].toString());
+        controller.validateSelectedCore("/missing/core", false, true, true);
+        QTRY_VERIFY(!controller.coreBusy());
+        QVERIFY(!controller.coreStatus().isEmpty());
+        QCOMPARE(repository.preference("sing-box-path"), QStringLiteral("/missing/core"));
+    }
 };
 
 QTEST_GUILESS_MAIN(ProfileTests)

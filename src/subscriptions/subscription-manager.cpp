@@ -9,6 +9,7 @@ namespace sunlens {
 SubscriptionManager::SubscriptionManager(ProfileRepository& repository, FetchPolicy policy,
                                          QObject* parent)
     : QObject(parent), repository_(repository), policy_(policy) {
+    network_.setAutoDeleteReplies(false);
     policy_.maxBytes = std::clamp(policy_.maxBytes, qsizetype(1), ProfileParser::MaxBytes);
     policy_.retries = std::clamp(policy_.retries, 0, 2);
     policy_.timeoutMs = std::clamp(policy_.timeoutMs, 10, 60000);
@@ -20,6 +21,16 @@ SubscriptionManager::SubscriptionManager(ProfileRepository& repository, FetchPol
         if (reply_)
             reply_->abort();
     });
+}
+
+SubscriptionManager::~SubscriptionManager() {
+    retry_.stop();
+    deadline_.stop();
+    if (reply_) {
+        reply_->disconnect(this);
+        reply_->abort();
+        releaseReply();
+    }
 }
 
 bool SubscriptionManager::busy() const { return active_; }
@@ -112,7 +123,7 @@ void SubscriptionManager::releaseReply() {
     if (reply_) {
         reply_->disconnect(this);
         reply_->deleteLater();
-        reply_.clear();
+        reply_ = nullptr;
     }
 }
 

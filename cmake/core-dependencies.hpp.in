@@ -1,0 +1,8 @@
+#pragma once
+
+#include <QString>
+
+namespace sunlens {
+inline const QString SingBoxVersion = QStringLiteral("@SING_BOX_VERSION@");
+inline const QByteArray SingBoxLinuxHash = QByteArrayLiteral("@SING_BOX_LINUX_HASH@");
+}

@@ -27,7 +27,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 libxcb-cursor0 clang-format
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 libxcb-cursor0 clang-format clang-tidy
       - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.8.3'
@@ -38,12 +38,22 @@ jobs:
       - name: Formatting
         if: runner.os == 'Linux'
         run: python tools/check-format.py
+      - name: Acquire hash-pinned core for non-privileged validation
+        if: runner.os == 'Linux'
+        run: python tools/fetch-core.py --destination build/dependencies
       - name: Configure
+        if: runner.os == 'Windows'
         run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Configure including real core validator
+        if: runner.os == 'Linux'
+        run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-box"
       - name: Build
         run: cmake --build build/ci --config Release --parallel 2
+      - name: Clang static analyzer
+        if: runner.os == 'Linux'
+        run: python tools/check-static.py --build-directory build/ci
       - name: Non-privileged tests (not TUN verification)
         run: ctest --test-dir build/ci -C Release --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
-          QSG_RHI_BACKEND: software
+          QT_QUICK_BACKEND: software

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "qt": {
+    "ciVersion": "6.8.3",
+    "minimumVersion": "6.4",
+    "distributionReview": "pending"
+  },
+  "cores": {
+    "sing-box": {
+      "version": "1.14.4",
+      "sourceCommit": "c005f35300ce76427dc285481ec5695f5b179cd2",
+      "source": "https://github.com/SagerNet/sing-box",
+      "license": "GPL-3.0-or-later; upstream naming restriction requires review",
+      "hashProvenance": "SHA-256 measured from official HTTPS release download; no independent signature verified",
+      "assets": {
+        "linux-amd64": {
+          "url": "https://github.com/SagerNet/sing-box/releases/download/v1.14.4/sing-box-1.14.4-linux-amd64.tar.gz",
+          "archiveSha256": "699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968",
+          "binaryMember": "sing-box-1.14.4-linux-amd64/sing-box",
+          "binarySha256": "1264361b5f8868c8768f7555d3e77e20118bf503c41ac08bb290a0d99056aa3a",
+          "validation": "configuration-only",
+          "liveTunVerified": false
+        }
+      },
+      "windowsStatus": "not-verified"
+    },
+    "xray": {
+      "version": null,
+      "status": "not-implemented",
+      "liveTunVerified": false
+    }
+  }
+}

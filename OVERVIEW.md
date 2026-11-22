@@ -20,6 +20,8 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `qml/Main.qml` — интерфейс и явное состояние недоступности TUN.
 - `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
 - `src/persistence/` — SQLite-профили, подписки и preferences.
+- `src/core/` — Linux sing-box config и проверка версии/хеша/схемы.
+- `dependencies.json` — закреплённый backend manifest; `tools/fetch-core.py` — developer acquisition.
 - `include/sunlens/` — backend-neutral модель и публичные API.
 - `assets/` — исходные SVG и desktop entry.
 - `cmake/version.hpp.in` — версия из единственного источника `VERSION`.
@@ -37,6 +39,8 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 заменяет подписку атомарно с сохранением ID и пользовательских меток.
 `SubscriptionManager::fetch()/refresh()/cancel()` управляют ограниченным HTTP.
 `ApplicationController` предоставляет QML безопасные отображаемые поля и действия.
+`SingBoxAdapter::configuration()` генерирует JSON без изменения сети;
+`validate()` проверяет закреплённый executable и выполняет `sing-box check`.
 
 Начните с `README.md` и `docs/milestones.md`. Успешный GUI smoke-test не
 подтверждает TUN, утечки или работоспособность установщика.

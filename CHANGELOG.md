@@ -9,11 +9,16 @@
 - Транзакционные HTTPS-подписки с timeout, retry и лимитом размера.
 - SQLite, стабильные ID групп/узлов, пользовательские метки и выбор сервера.
 - Тесты парсинга, rollback после частичной SQL-записи и loopback HTTP-сбоев.
+- Manifest sing-box 1.14.4 с SHA-256, ограниченная загрузка development-зависимости.
+- Генерация Linux TUN-конфигурации четырёх протоколов и режимов proxy/direct/rules.
+- Асинхронная проверка настоящим sing-box из GUI, без запуска VPN.
+- Реальные неповышенные проверки 15 конфигураций и clang static analyzer в Linux CI.
 
 ### Changed
 ### Fixed
 ### Security
 - HTTPS без отключения TLS и без автоматических redirects/cookies.
 - Закрытые Unix-права данных, запрет root GUI и отсутствие секретов в view model.
+- Отказ от неподтверждённого ядра, закрытые временные config-файлы и ограниченный вывод QProcess.
 ### Deprecated
 ### Removed
