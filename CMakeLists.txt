@@ -10,10 +10,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
-include(GNUInstallDirs)
 if(UNIX AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Каталог установки" FORCE)
 endif()
+include(GNUInstallDirs)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network Sql Concurrent)
 qt_standard_project_setup()
@@ -94,6 +94,12 @@ install(FILES assets/logo.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolo
     RENAME sunlens.svg)
 install(FILES VERSION LICENSE third_party/NOTICE.md
     DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
+install(FILES dependencies.json DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
+
+option(SUNLENS_PACKAGE_DEB "Разрешить сборку локального DEB для Ubuntu 24.04" OFF)
+if(SUNLENS_PACKAGE_DEB)
+    include(cmake/debian-package.cmake)
+endif()
 
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)

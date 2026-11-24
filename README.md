@@ -30,6 +30,9 @@ GUI подключён к IPC установленного root-owned помощ
 разрешается использовать для elevation. Системный resolver и установленный
 polkit flow пока не проверены. Это не полный release gate.
 
+Локальный CPack DEB прошёл smoke-test в чистой Ubuntu 24.04.5: установка,
+offscreen GUI и purge. См. [проверки](docs/verification.md); пакет не опубликован.
+
 ## Начало работы
 
 Требуются CMake ≥3.24, Ninja, C++20 и Qt ≥6.4 с модулями Core, Gui,

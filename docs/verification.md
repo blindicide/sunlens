@@ -64,3 +64,20 @@ Linux Mint 22.3 x86_64, Qt 6.4.2, namespace fixture с sing-box VLESS серве
 SIGKILL помощника. На внешнем veth — 0 открытых целевых или DNS пакетов
 по фильтру fixture. Журнал: `build/dev/evidence/linux-xray/result.json`.
 Windows, системный resolver и установленный polkit по-прежнему не проверены.
+
+## DEB: чистая Ubuntu 24.04.5 LTS x86_64
+
+`cmake --build build/deb --target package` и `tools/verify-deb.py` прошли.
+Локальный файл `sunlens-0.1.0-linux-amd64.deb` в проверенном прогоне:
+SHA-256 `42d7b23997e75f54bd6ad83f1e2691f15d113d8e69e8b2096770497d71230be2`.
+В новой гостевой KVM VM на Ubuntu Minimal Cloud Image без Qt SDK/CMake/Go
+`tests/integration/debian-install-smoke.sh` прошёл: apt разрешил зависимости,
+GUI запустился offscreen без Qt warnings, имена/версии и SHA-256 обоих ядер
+совпали, policy и включённая recovery unit присутствовали. Установленный
+помощник принял IPC через тестовый `sudo`, отказал обычному пользователю и
+заблокировал обслуживание при занятой сессии. Пакет был удалён с purge,
+пользовательский fixture сохранён, статические маршруты/правила совпали.
+Лог: `build/deb/clean-install-smoke.log`.
+
+Тест не открывал туннель из установленного пакета и не авторизовывался через
+polkit agent. Не проверяет системный DNS через VPN и удаление при живом TUN.

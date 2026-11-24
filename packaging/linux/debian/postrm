@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    remove|purge)
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper purge sunlens-recover.service
+        fi
+        # Каталоги созданы только root; рабочие данные пользователя не удаляются.
+        if [ -d /run/sunlens ] && [ ! -L /run/sunlens ]; then
+            rm -f /run/sunlens/uninstalling
+            rmdir /run/sunlens 2>/dev/null || true
+        fi
+        rmdir /var/lib/sunlens 2>/dev/null || true
+        ;;
+esac

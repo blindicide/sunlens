@@ -59,3 +59,27 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+
+  deb-package-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Native Qt toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window
+      - name: Check local-only DEB build and payload
+        run: |
+          python3 tools/fetch-core.py --destination build/dependencies
+          python3 tools/fetch-core.py --core xray --destination build/dependencies
+          cmake -S . -B build/deb -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DSUNLENS_PACKAGE_DEB=ON \
+            -DSUNLENS_PACKAGE_SING_BOX="$PWD/build/dependencies/sing-box" \
+            -DSUNLENS_PACKAGE_XRAY="$PWD/build/dependencies/xray"
+          cmake --build build/deb --target package --parallel 2
+          python3 tools/verify-deb.py "build/deb/sunlens-$(cat VERSION)-linux-amd64.deb"

@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QLockFile>
@@ -48,7 +49,10 @@ int main(int argc, char* argv[]) {
                                                                                              : 1;
     }
     const bool recovery = arguments.size() == 2 && arguments[1] == "--recover";
-    if ((arguments.size() != 1 && !recovery) || ::geteuid() != 0) {
+    const bool preRemove = arguments.size() == 2 && arguments[1] == "--prepare-uninstall";
+    const bool postInstall = arguments.size() == 2 && arguments[1] == "--finish-install";
+    if ((arguments.size() != 1 && !recovery && !preRemove && !postInstall) || ::geteuid() != 0 ||
+        (arguments.size() != 1 && qEnvironmentVariableIsSet("PKEXEC_UID"))) {
         qCritical("Помощник требует авторизации polkit; произвольные аргументы запрещены.");
         return 1;
     }
@@ -60,15 +64,38 @@ int main(int argc, char* argv[]) {
     try {
         privateDirectory(sunlens::HelperStateDirectory);
         privateDirectory(sunlens::HelperRuntimeDirectory);
+        const auto maintenance =
+            QDir(sunlens::HelperRuntimeDirectory).filePath(QStringLiteral("uninstalling"));
+        if (postInstall && !QFile::exists(maintenance) && !QFileInfo(maintenance).isSymLink())
+            return 0;
         QLockFile lock(QDir(sunlens::HelperStateDirectory).filePath(QStringLiteral("helper.lock")));
         lock.setStaleLockTime(0);
         if (!lock.tryLock(0))
             throw sunlens::Error(
                 QStringLiteral("Другой сетевой помощник уже работает. Сначала отключитесь."));
+        if (postInstall) {
+            if (QFileInfo(maintenance).isSymLink() ||
+                (QFile::exists(maintenance) && !QFile::remove(maintenance)))
+                throw sunlens::Error(QStringLiteral("Не удалось завершить обслуживание SUNLENS."));
+            return 0;
+        }
+        if (!recovery && !preRemove &&
+            (QFile::exists(maintenance) || QFileInfo(maintenance).isSymLink()))
+            throw sunlens::Error(QStringLiteral("SUNLENS обслуживается пакетным менеджером."));
         sunlens::LinuxTunnelPaths paths{sunlens::InstalledSingBox, sunlens::HelperRuntimeDirectory};
         paths.xray = sunlens::InstalledXray;
         auto platform = std::make_unique<sunlens::LinuxTunnelPlatform>(paths);
         sunlens::TunnelManager manager(std::move(platform), sunlens::HelperStateDirectory);
+        if (preRemove) {
+            if (!manager.recover())
+                throw sunlens::Error(manager.status()["message"].toString());
+            QFile marker(maintenance);
+            if (QFileInfo(maintenance).isSymLink() ||
+                (!marker.exists() && !marker.open(QIODevice::WriteOnly | QIODevice::NewOnly)))
+                throw sunlens::Error(
+                    QStringLiteral("Не удалось закрыть новые подключения перед удалением."));
+            return 0;
+        }
         if (recovery)
             return manager.recover() ? 0 : 1;
         nonblocking(STDIN_FILENO);

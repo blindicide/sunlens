@@ -13,6 +13,9 @@ NoNewPrivileges=yes
 ProtectHome=yes
 PrivateTmp=yes
 ProtectSystem=strict
+RuntimeDirectory=sunlens
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
 ReadWritePaths=/var/lib/sunlens /run/sunlens
 
 [Install]
