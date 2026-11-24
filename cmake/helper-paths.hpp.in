@@ -7,6 +7,8 @@ inline const QString InstalledHelper =
     QStringLiteral("@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/sunlens-tunnel-helper");
 inline const QString InstalledSingBox =
     QStringLiteral("@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/cores/sing-box");
+inline const QString InstalledXray =
+    QStringLiteral("@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/cores/xray");
 inline const QString HelperStateDirectory = QStringLiteral("/var/lib/sunlens");
 inline const QString HelperRuntimeDirectory = QStringLiteral("/run/sunlens");
 }

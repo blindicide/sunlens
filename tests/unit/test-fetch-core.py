@@ -7,6 +7,7 @@ import pathlib
 import tarfile
 import tempfile
 import unittest
+import zipfile
 
 root = pathlib.Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("fetch_core", root / "tools/fetch-core.py")
@@ -90,6 +91,19 @@ class CoreAcquisitionTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             fetch_core.acquire(self.asset, self.destination, self.opener)
         self.assertEqual(binary.read_bytes(), b"preexisting-file")
+
+    def test_zip_member_is_verified(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr(self.member, self.content)
+            archive.writestr("../../unwanted", "ignored")
+        self.archive = buffer.getvalue()
+        self.asset["url"] = "https://example.invalid/core.zip"
+        self.asset["archiveSha256"] = hashlib.sha256(self.archive).hexdigest()
+        binary = fetch_core.acquire(self.asset, self.destination, self.opener, "xray")
+        self.assertEqual(binary.name, "xray")
+        self.assertEqual(binary.read_bytes(), self.content)
+        self.assertFalse((self.destination.parent / "unwanted").exists())
 
 
 if __name__ == "__main__":

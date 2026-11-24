@@ -40,13 +40,15 @@ jobs:
         run: python tools/check-format.py
       - name: Acquire hash-pinned core for non-privileged validation
         if: runner.os == 'Linux'
-        run: python tools/fetch-core.py --destination build/dependencies
+        run: |
+          python tools/fetch-core.py --destination build/dependencies
+          python tools/fetch-core.py --core xray --destination build/dependencies
       - name: Configure
         if: runner.os == 'Windows'
         run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Configure including real core validator
         if: runner.os == 'Linux'
-        run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-box"
+        run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-box" -DSUNLENS_XRAY_EXECUTABLE="$PWD/build/dependencies/xray"
       - name: Build
         run: cmake --build build/ci --config Release --parallel 2
       - name: Clang static analyzer

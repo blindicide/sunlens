@@ -51,6 +51,7 @@ bool TunnelManager::start(const TunnelRequest& request) {
         if (journal_.load())
             throw Error(QStringLiteral("Перед подключением требуется восстановление сети."));
         lease_ = platform_->reserve(platform_->snapshot());
+        lease_->core = checked.core;
         journal_.save(*lease_, QStringLiteral("prepared"));
         platform_->launch(checked, *lease_);
         journal_.save(*lease_, QStringLiteral("starting"));
@@ -133,6 +134,7 @@ QJsonObject TunnelManager::status() const {
     if (lease_) {
         result.insert("sessionId", lease_->id);
         result.insert("interfaceName", lease_->interfaceName);
+        result.insert("core", lease_->core);
     }
     return result;
 }

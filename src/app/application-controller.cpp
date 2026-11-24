@@ -13,6 +13,10 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
     if (!adapter_)
         throw Error(QStringLiteral("Не задан адаптер ядра."));
     corePath_ = repository_.preference(QStringLiteral("sing-box-path"));
+    if (repository_.preference(QStringLiteral("selected-core")) == "xray") {
+        selectedCore_ = QStringLiteral("xray");
+        corePath_ = repository_.preference(QStringLiteral("xray-path"));
+    }
     connect(tunnel_.get(), &ITunnelClient::statusReceived, this, [this](const QJsonObject& status) {
         tunnelState_ = status["state"].toString();
         tunnelMessage_ = status["message"].toString();
@@ -53,6 +57,22 @@ bool ApplicationController::busy() const { return manager_.busy(); }
 bool ApplicationController::coreBusy() const { return coreBusy_; }
 QString ApplicationController::corePath() const { return corePath_; }
 QString ApplicationController::coreStatus() const { return coreStatus_; }
+QString ApplicationController::selectedCore() const { return selectedCore_; }
+void ApplicationController::setSelectedCore(const QString& core) {
+    if (coreBusy_ || tunnelActive() || core == selectedCore_ ||
+        (core != "sing-box" && core != "xray"))
+        return;
+    try {
+        const auto path = repository_.preference(core + QStringLiteral("-path"));
+        repository_.setPreference(QStringLiteral("selected-core"), core);
+        selectedCore_ = core;
+        corePath_ = path;
+        coreStatus_ = QStringLiteral("Выбранное ядро ещё не проверено.");
+        emit coreInfoChanged();
+    } catch (const Error& error) {
+        setMessage(QString::fromUtf8(error.what()));
+    }
+}
 bool ApplicationController::tunnelAvailable() const { return tunnel_->available(); }
 QString ApplicationController::tunnelState() const { return tunnelState_; }
 QString ApplicationController::tunnelMessage() const { return tunnelMessage_; }
@@ -195,14 +215,18 @@ void ApplicationController::validateSelectedCore(const QString& executable, bool
         options.routing = direct ? RoutingMode::Direct : RoutingMode::Proxy;
         options.bypassLan = bypassLan;
         options.ipv6 = ipv6;
-        const auto config = adapter_->configuration(*selected, options);
+        std::shared_ptr<const ICoreAdapter> adapter = adapter_;
+        if (selectedCore_ == "xray") {
+            adapter = std::make_shared<XrayAdapter>();
+            options.dns = {QStringLiteral("1.1.1.1"), 53, false, {}};
+        }
+        const auto config = adapter->configuration(*selected, options);
         corePath_ = executable.trimmed();
-        repository_.setPreference(QStringLiteral("sing-box-path"), corePath_);
+        repository_.setPreference(selectedCore_ + QStringLiteral("-path"), corePath_);
         coreBusy_ = true;
         coreStatus_ =
             QStringLiteral("Проверка SHA-256, версии и конфигурации. Сеть не изменяется.");
         emit coreInfoChanged();
-        const auto adapter = adapter_;
         const auto path = corePath_;
         validation_.setFuture(QtConcurrent::run([adapter, path, config] {
             try {
@@ -229,6 +253,7 @@ void ApplicationController::startTunnel(int routing, bool bypassLan, bool ipv6,
             if (server.id != selectedId_)
                 continue;
             TunnelRequest request;
+            request.core = selectedCore_;
             request.serverId = server.id;
             request.subscriptionId = server.subscriptionId;
             request.node = server.node;

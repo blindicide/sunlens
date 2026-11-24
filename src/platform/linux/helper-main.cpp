@@ -66,6 +66,7 @@ int main(int argc, char* argv[]) {
             throw sunlens::Error(
                 QStringLiteral("Другой сетевой помощник уже работает. Сначала отключитесь."));
         sunlens::LinuxTunnelPaths paths{sunlens::InstalledSingBox, sunlens::HelperRuntimeDirectory};
+        paths.xray = sunlens::InstalledXray;
         auto platform = std::make_unique<sunlens::LinuxTunnelPlatform>(paths);
         sunlens::TunnelManager manager(std::move(platform), sunlens::HelperStateDirectory);
         if (recovery)

@@ -33,8 +33,9 @@ qt_version = dependencies["qt"]["ciVersion"]
 workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 if f"version: '{qt_version}'" not in workflow:
     raise SystemExit("Версия Qt CI расходится с dependency manifest.")
-asset = dependencies["cores"]["sing-box"]["assets"]["linux-amd64"]
-for key in ("archiveSha256", "binarySha256"):
-    if not re.fullmatch("[0-9a-f]{64}", asset[key]):
-        raise SystemExit("Некорректное закрепление SHA-256.")
+for core in ("sing-box", "xray"):
+    asset = dependencies["cores"][core]["assets"]["linux-amd64"]
+    for key in ("archiveSha256", "binarySha256"):
+        if not re.fullmatch("[0-9a-f]{64}", asset[key]):
+            raise SystemExit("Некорректное закрепление SHA-256.")
 print("Dependency manifest и версия Qt CI: OK; лицензионный выпуск остаётся заблокирован.")

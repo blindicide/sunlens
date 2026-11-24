@@ -33,6 +33,7 @@ struct TunnelLease {
     qint64 processId = 0;
     QString processIdentity;
     QJsonObject before;
+    QString core = QStringLiteral("sing-box");
     [[nodiscard]] QJsonObject toJson() const;
     [[nodiscard]] static TunnelLease fromJson(const QJsonObject& object);
 };

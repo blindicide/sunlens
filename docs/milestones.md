@@ -30,6 +30,8 @@
 ## M4–M6 — матрица и безопасность
 - [ ] Windows/sing-box TUN.
 - [ ] Linux/Xray и Windows/Xray TUN с независимыми конфигурациями.
+- [x] Xray 26.11.9: отдельная схема, закреплённое ядро, проверка конфигурации
+  и изолированный live VLESS TUN на Linux.
 - [ ] Смена узла/ядра, неверные credentials, timeout, аварийный выход.
 - [ ] IPv4/IPv6, TCP/UDP, LAN bypass, DNS, защита upstream от петли.
 - [ ] Сон/пробуждение, смена интерфейса, отмена elevation, crash/reboot cleanup.

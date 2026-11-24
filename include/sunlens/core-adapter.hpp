@@ -39,6 +39,7 @@ struct CoreOptions {
     QVector<RouteRule> rules;
     DnsOptions dns;
     TunParameters tunnel;
+    void validate() const;
 };
 
 struct CoreCapabilities {
@@ -66,6 +67,15 @@ class ICoreAdapter {
 };
 
 class SingBoxAdapter final : public ICoreAdapter {
+  public:
+    [[nodiscard]] CoreCapabilities capabilities() const override;
+    [[nodiscard]] QJsonDocument configuration(const Node& node,
+                                              const CoreOptions& options) const override;
+    [[nodiscard]] ValidationResult validate(const QString& executable,
+                                            const QJsonDocument& config) const override;
+};
+
+class XrayAdapter final : public ICoreAdapter {
   public:
     [[nodiscard]] CoreCapabilities capabilities() const override;
     [[nodiscard]] QJsonDocument configuration(const Node& node,

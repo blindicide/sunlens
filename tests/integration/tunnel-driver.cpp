@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     // Этот driver не устанавливается и работает только в user namespace непривилегированного UID.
     const auto mapping = contents(QStringLiteral("/proc/self/uid_map")).simplified().split(' ');
     if (::geteuid() != 0 || mapping.size() != 3 || mapping[0] != "0" || mapping[1] == "0" ||
-        mapping[2] != "1" || app.arguments().size() != 5) {
+        mapping[2] != "1" || (app.arguments().size() != 5 && app.arguments().size() != 6)) {
         qCritical("Driver разрешён только внутри изолированного user/network namespace.");
         return 1;
     }
@@ -35,6 +35,8 @@ int main(int argc, char* argv[]) {
                                         QStringLiteral("/usr/bin/resolvectl"),
                                         false,
                                         false};
+        if (arguments.size() == 6)
+            paths.xray = arguments[5];
         sunlens::TunnelManager manager(std::make_unique<sunlens::LinuxTunnelPlatform>(paths),
                                        arguments[3]);
         const auto respond = [&] {

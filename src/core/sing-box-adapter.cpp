@@ -1,54 +1,11 @@
 #include "sunlens/core-adapter.hpp"
 #include "sunlens/core-dependencies.hpp"
+#include "sunlens/external-core.hpp"
 
-#include <QCryptographicHash>
-#include <QDeadlineTimer>
-#include <QFile>
-#include <QFileInfo>
-#include <QHostAddress>
 #include <QJsonArray>
-#include <QProcess>
-#include <QRegularExpression>
-#include <QTemporaryDir>
 
 namespace sunlens {
 namespace {
-
-struct ProcessResult {
-    bool ok = false;
-    QByteArray output;
-};
-
-ProcessResult runChecked(const QString& executable, const QStringList& arguments) {
-    QProcess process;
-    process.setProgram(executable);
-    process.setArguments(arguments);
-    process.setProcessChannelMode(QProcess::MergedChannels);
-    QByteArray output;
-    bool overflow = false;
-    const auto drain = [&] {
-        output += process.read(65537 - output.size());
-        if (output.size() > 65536) {
-            overflow = true;
-            process.kill();
-        }
-    };
-    QObject::connect(&process, &QProcess::readyRead, &process, drain);
-    process.start();
-    if (!process.waitForStarted(2000))
-        return {};
-    QDeadlineTimer deadline(5000);
-    while (process.state() != QProcess::NotRunning && !deadline.hasExpired() && !overflow)
-        process.waitForReadyRead(100);
-    if (process.state() != QProcess::NotRunning) {
-        process.kill();
-        process.waitForFinished(1000);
-        return {};
-    }
-    drain();
-    return {!overflow && process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0,
-            output};
-}
 
 QJsonObject tlsOptions(const QString& name) {
     QJsonObject object{{"enabled", true}};
@@ -100,15 +57,8 @@ QJsonObject outbound(const Node& node) {
 QJsonObject ruleObject(const RouteRule& rule) {
     QString field;
     if (rule.kind == RuleKind::IpCidr) {
-        if (!rule.value.contains('/') || QHostAddress::parseSubnet(rule.value).second < 0)
-            throw Error(QStringLiteral("Правило IP требует корректный CIDR."));
         field = QStringLiteral("ip_cidr");
     } else {
-        static const QRegularExpression domain(
-            QStringLiteral("^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$"));
-        if (rule.value.size() > 253 || !domain.match(rule.value).hasMatch() ||
-            rule.value.contains(".."))
-            throw Error(QStringLiteral("Правило домена содержит некорректное имя."));
         field = rule.kind == RuleKind::Domain ? QStringLiteral("domain")
                                               : QStringLiteral("domain_suffix");
     }
@@ -125,24 +75,8 @@ CoreCapabilities SingBoxAdapter::capabilities() const {
 
 QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions& options) const {
     node.validate();
+    options.validate();
     const auto& parameters = options.tunnel;
-    static const QRegularExpression name(QStringLiteral("^[a-zA-Z][a-zA-Z0-9_-]{0,14}$"));
-    if (!name.match(parameters.interfaceName).hasMatch() || parameters.routeTable < 256 ||
-        parameters.rulePriority < 1 || parameters.rulePriority > 32750 ||
-        QHostAddress::parseSubnet(parameters.ipv4Prefix).second != 30 ||
-        QHostAddress::parseSubnet(parameters.ipv6Prefix).second != 126)
-        throw Error(QStringLiteral("Неверные внутренние параметры TUN."));
-    QHostAddress resolver;
-    if (!resolver.setAddress(options.dns.address) || resolver.isNull() || resolver.isMulticast() ||
-        resolver.isLoopback() || options.dns.port < 1 || options.dns.port > 65535 ||
-        options.dns.tlsName.size() > 253 ||
-        options.dns.tlsName.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
-        throw Error(QStringLiteral("DNS требует IP-адрес, порт и корректное имя TLS."));
-    if (options.routing != RoutingMode::Rules && !options.rules.isEmpty())
-        throw Error(
-            QStringLiteral("Пользовательские правила требуют режима маршрутизации по правилам."));
-    if (options.rules.size() > 1000)
-        throw Error(QStringLiteral("Слишком много правил: максимум 1000."));
     QJsonArray rules;
     if (!options.ipv6)
         rules.append(QJsonObject{{"ip_version", 6}, {"action", "reject"}});
@@ -195,59 +129,12 @@ QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions&
 
 ValidationResult SingBoxAdapter::validate(const QString& executable,
                                           const QJsonDocument& config) const {
-#ifndef Q_OS_LINUX
-    Q_UNUSED(executable)
-    Q_UNUSED(config)
-    return {false, QStringLiteral("Проверка ядра пока реализована только для Linux x86_64."), {}};
-#else
-    const QFileInfo info(executable);
-    if (!info.isAbsolute() || !info.isFile() || !info.isExecutable() || info.isSymLink())
-        return {false,
-                QStringLiteral("Укажите абсолютный путь к обычному исполняемому файлу ядра."),
-                {}};
-    QFile binary(executable);
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    if (!binary.open(QIODevice::ReadOnly) || !hash.addData(&binary) ||
-        hash.result().toHex() != SingBoxLinuxHash)
-        return {
-            false,
-            QStringLiteral("SHA-256 ядра не совпадает с закреплённым manifest. Запуск отменён."),
-            {}};
-    binary.close();
-    const auto version = runChecked(executable, {QStringLiteral("version")});
-    const auto expected = QByteArray("sing-box version ") + SingBoxVersion.toUtf8();
-    if (!version.ok || !(version.output.startsWith(expected + '\n') ||
-                         version.output.startsWith(expected + "\r\n")))
-        return {false, QStringLiteral("Не удалось подтвердить закреплённую версию sing-box."), {}};
-    try {
-        if (!config.isObject())
-            throw Error(QStringLiteral("Конфигурация должна быть JSON-объектом."));
-        QTemporaryDir directory;
-        if (!directory.isValid())
-            throw Error(QStringLiteral("Не удалось создать закрытый временный каталог."));
-        QFile file(directory.filePath(QStringLiteral("config.json")));
-        if (!file.open(QIODevice::WriteOnly | QIODevice::NewOnly) ||
-            !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner))
-            throw Error(QStringLiteral("Не удалось создать закрытый файл конфигурации."));
-        const auto data = config.toJson(QJsonDocument::Compact);
-        if (file.write(data) != data.size() || !file.flush())
-            throw Error(QStringLiteral("Не удалось записать конфигурацию ядра."));
-        file.close();
-        const auto check = runChecked(executable, {"check", "-c", file.fileName()});
-        if (!check.ok)
-            return {false,
-                    QStringLiteral(
-                        "sing-box отклонил конфигурацию или не ответил за 5 секунд. "
-                        "Проверьте поддержанные параметры; сырой вывод скрыт из-за секретов."),
-                    SingBoxVersion};
-        return {true,
-                QStringLiteral("sing-box %1: конфигурация принята. TUN не запускался.")
-                    .arg(SingBoxVersion),
-                SingBoxVersion};
-    } catch (const Error& error) {
-        return {false, QString::fromUtf8(error.what()), SingBoxVersion};
-    }
-#endif
+    return validateExternalCore(executable, config,
+                                {QStringLiteral("sing-box"),
+                                 SingBoxVersion,
+                                 SingBoxLinuxHash,
+                                 QByteArray("sing-box version ") + SingBoxVersion.toUtf8() + '\n',
+                                 {"check", "-c"}});
 }
 
 } // namespace sunlens

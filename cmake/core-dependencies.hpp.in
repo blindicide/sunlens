@@ -5,4 +5,6 @@
 namespace sunlens {
 inline const QString SingBoxVersion = QStringLiteral("@SING_BOX_VERSION@");
 inline const QByteArray SingBoxLinuxHash = QByteArrayLiteral("@SING_BOX_LINUX_HASH@");
+inline const QString XrayVersion = QStringLiteral("@XRAY_VERSION@");
+inline const QByteArray XrayLinuxHash = QByteArrayLiteral("@XRAY_LINUX_HASH@");
 }

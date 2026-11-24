@@ -70,7 +70,7 @@ TunnelRequest TunnelRequest::fromJson(const QJsonObject& object) {
         throw Error(QStringLiteral("Неверная схема запроса помощника."));
     TunnelRequest result;
     result.core = text(object, "core");
-    if (result.core != "sing-box")
+    if (result.core != "sing-box" && result.core != "xray")
         throw Error(QStringLiteral("Это ядро ещё не поддерживается сетевым помощником."));
     result.serverId = text(object, "serverId");
     result.subscriptionId = text(object, "subscriptionId");
@@ -101,7 +101,10 @@ TunnelRequest TunnelRequest::fromJson(const QJsonObject& object) {
                                      text(rule, "value"), boolean(rule, "direct")});
     }
     // Генератор валидирует применимость правил и все параметры до изменения сети.
-    (void)SingBoxAdapter().configuration(result.node, result.options);
+    if (result.core == "xray")
+        (void)XrayAdapter().configuration(result.node, result.options);
+    else
+        (void)SingBoxAdapter().configuration(result.node, result.options);
     return result;
 }
 
@@ -116,13 +119,14 @@ QJsonObject TunnelLease::toJson() const {
             {"interfaceIndex", interfaceIndex},
             {"processId", processId},
             {"processIdentity", processIdentity},
-            {"before", before}};
+            {"before", before},
+            {"core", core}};
 }
 
 TunnelLease TunnelLease::fromJson(const QJsonObject& object) {
-    onlyFields(object,
-               {"id", "bootId", "interfaceName", "ipv4Prefix", "ipv6Prefix", "routeTable",
-                "rulePriority", "interfaceIndex", "processId", "processIdentity", "before"});
+    onlyFields(object, {"id", "bootId", "interfaceName", "ipv4Prefix", "ipv6Prefix", "routeTable",
+                        "rulePriority", "interfaceIndex", "processId", "processIdentity", "before",
+                        "core"});
     TunnelLease lease;
     lease.id = text(object, "id");
     lease.bootId = text(object, "bootId");
@@ -135,6 +139,8 @@ TunnelLease TunnelLease::fromJson(const QJsonObject& object) {
         static_cast<int>(integer(object, "interfaceIndex", 0, std::numeric_limits<int>::max()));
     lease.processId = integer(object, "processId", 0, std::numeric_limits<int>::max());
     lease.processIdentity = text(object, "processIdentity");
+    if (object.contains("core"))
+        lease.core = text(object, "core");
     static const QRegularExpression interface(QStringLiteral("^sln[0-9a-f]{8}$"));
     static const QRegularExpression ticks(QStringLiteral("^[0-9]{1,24}$"));
     const auto ipv4 = QHostAddress::parseSubnet(lease.ipv4Prefix);
@@ -144,7 +150,7 @@ TunnelLease TunnelLease::fromJson(const QJsonObject& object) {
         ipv4.first.protocol() != QAbstractSocket::IPv4Protocol || ipv6.second != 126 ||
         ipv6.first.protocol() != QAbstractSocket::IPv6Protocol ||
         (lease.processId > 0 && !ticks.match(lease.processIdentity).hasMatch()) ||
-        !object["before"].isObject())
+        !object["before"].isObject() || (lease.core != "sing-box" && lease.core != "xray"))
         throw Error(
             QStringLiteral("Повреждён журнал восстановления; автоматическая очистка запрещена."));
     lease.before = object["before"].toObject();

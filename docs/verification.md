@@ -52,3 +52,15 @@ cmake --preset dev -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-b
 Это проверка TunnelManager/LinuxTunnelPlatform с настоящим ядром, **не**
 установленного polkit-помощника и не takeover системного resolver.
 Подробные команды, evidence и оставшиеся границы — `docs/linux-helper.md`.
+
+## Xray 26.11.9
+
+Linux Mint 22.3 x86_64, Qt 6.4.2, namespace fixture с sing-box VLESS сервером.
+`ctest --preset dev -j 4`: 11/11 suites, включая оба live TUN теста.
+Настоящий Xray `run -test` принял VLESS, VMess, Trojan и Shadowsocks.
+`linux-live-xray` подтвердил TCP/UDP × IPv4/IPv6, явный DNS через туннель,
+блокировку IPv6, отсутствие direct fallback с неверным UUID, освобождение
+маршрутов и правил при отключении, SIGKILL ядра и при восстановлении после
+SIGKILL помощника. На внешнем veth — 0 открытых целевых или DNS пакетов
+по фильтру fixture. Журнал: `build/dev/evidence/linux-xray/result.json`.
+Windows, системный resolver и установленный polkit по-прежнему не проверены.

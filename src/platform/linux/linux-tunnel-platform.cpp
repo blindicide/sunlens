@@ -115,6 +115,15 @@ bool freeReservation(const TunnelLease& lease, const QJsonObject& before) {
 bool ownedRule(const QJsonObject& rule, const TunnelLease& lease) {
     if (tableId(rule["table"]) == lease.routeTable)
         return true;
+    if (lease.core == "xray") {
+        const auto mark = rule["fwmark"].toString();
+        if (rule.contains("fwmask") ||
+            mark.toUInt(nullptr, 0) != static_cast<unsigned>(lease.routeTable))
+            return false;
+        const int priority = rule["priority"].toInt();
+        return (rule["table"] == QJsonValue("main") && priority == lease.rulePriority) ||
+               (rule["action"] == QJsonValue("unreachable") && priority == lease.rulePriority + 1);
+    }
     if (rule.contains("nop") && rule["priority"].toInt() == lease.rulePriority + 10)
         return true;
     if (rule["goto"].toInt(-1) == lease.rulePriority + 10) {
@@ -138,9 +147,8 @@ LinuxTunnelPlatform::LinuxTunnelPlatform(LinuxTunnelPaths paths) : paths_(std::m
             throw Error(QStringLiteral("Небезопасный путь системного сетевого инструмента."));
         *executable = source.canonicalFilePath();
     }
-    if (paths_.strictOwnership &&
-        (!trustedPath(paths_.core, true) || !trustedPath(paths_.ip, true) ||
-         (paths_.systemDns && !trustedPath(paths_.resolvectl, true))))
+    if (paths_.strictOwnership && (!trustedPath(paths_.ip, true) ||
+                                   (paths_.systemDns && !trustedPath(paths_.resolvectl, true))))
         throw Error(QStringLiteral(
             "Ядро и сетевые инструменты должны принадлежать root без записи для других."));
     core_.setProcessEnvironment(safeEnvironment());
@@ -255,8 +263,16 @@ void LinuxTunnelPlatform::launch(const TunnelRequest& request, TunnelLease& leas
     // Первая транзакционная реализация не создаёт глобальные nftables-объекты.
     options.tunnel.autoRedirect = false;
     options.tunnel.nativeDns = paths_.systemDns;
-    const auto config = SingBoxAdapter().configuration(request.node, options);
-    const auto validation = SingBoxAdapter().validate(paths_.core, config);
+    const bool xray = request.core == "xray";
+    const QString executable = xray ? paths_.xray : paths_.core;
+    if (paths_.strictOwnership && !trustedPath(executable, true))
+        throw Error(QStringLiteral("Установите закреплённое ядро в закрытый root-owned каталог."));
+    const XrayAdapter xrayAdapter;
+    const SingBoxAdapter singBoxAdapter;
+    const ICoreAdapter& adapter = xray ? static_cast<const ICoreAdapter&>(xrayAdapter)
+                                       : static_cast<const ICoreAdapter&>(singBoxAdapter);
+    const auto config = adapter.configuration(request.node, options);
+    const auto validation = adapter.validate(executable, config);
     if (!validation.valid)
         throw Error(validation.message);
     const auto current = snapshot();
@@ -277,8 +293,8 @@ void LinuxTunnelPlatform::launch(const TunnelRequest& request, TunnelLease& leas
     if (file.write(bytes) != bytes.size() || !file.flush())
         throw Error(QStringLiteral("Не удалось сохранить конфигурацию."));
     file.close();
-    core_.setProgram(paths_.core);
-    core_.setArguments({"run", "-c", file.fileName()});
+    core_.setProgram(executable);
+    core_.setArguments({"run", xray ? "-config" : "-c", file.fileName()});
     const auto parentPid = ::getpid();
     core_.setChildProcessModifier([parentPid] {
         const struct rlimit limit {
@@ -309,6 +325,36 @@ bool LinuxTunnelPlatform::ready(TunnelLease& lease) {
     if (link.isEmpty() || !link["flags"].toArray().contains(QJsonValue("UP")))
         return false;
     lease.interfaceIndex = link["ifindex"].toInt();
+    if (lease.core == "xray") {
+        for (const auto& family : {QStringLiteral("-4"), QStringLiteral("-6")}) {
+            const auto rules = ipJson({family, "rule", "show"});
+            bool hasMark = false;
+            bool hasGuard = false;
+            bool hasRoute = false;
+            for (const auto& value : rules) {
+                const auto rule = value.toObject();
+                if (!ownedRule(rule, lease))
+                    continue;
+                hasMark |= rule["priority"].toInt() == lease.rulePriority;
+                hasGuard |= rule["priority"].toInt() == lease.rulePriority + 1;
+                hasRoute |= tableId(rule["table"]) == lease.routeTable;
+            }
+            if (!hasMark)
+                ipChange({family, "rule", "add", "priority", QString::number(lease.rulePriority),
+                          "fwmark", QString::number(lease.routeTable), "lookup", "main"});
+            if (!hasGuard)
+                ipChange({family, "rule", "add", "priority",
+                          QString::number(lease.rulePriority + 1), "fwmark",
+                          QString::number(lease.routeTable), "unreachable"});
+            if (!hasRoute) {
+                ipChange({family, "route", "add", "default", "dev", lease.interfaceName, "table",
+                          QString::number(lease.routeTable)});
+                ipChange({family, "rule", "add", "priority",
+                          QString::number(lease.rulePriority + 2), "lookup",
+                          QString::number(lease.routeTable)});
+            }
+        }
+    }
     bool routed4 = false;
     bool routed6 = false;
     for (const auto& rule : ipJson({"-4", "rule", "show"}))
@@ -346,7 +392,7 @@ void LinuxTunnelPlatform::shutdown(const TunnelLease& lease) {
         throw Error(QStringLiteral("Не удалось закрепить PID ядра; требуется Linux с pidfd."));
     if (processIdentity(lease.processId) != lease.processIdentity ||
         QFileInfo(QStringLiteral("/proc/%1/exe").arg(lease.processId)).symLinkTarget() !=
-            QFileInfo(paths_.core).canonicalFilePath()) {
+            QFileInfo(lease.core == "xray" ? paths_.xray : paths_.core).canonicalFilePath()) {
         ::close(pidfd);
         throw Error(QStringLiteral("PID ядра переиспользован; чужой процесс не будет остановлен."));
     }

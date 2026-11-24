@@ -218,7 +218,7 @@ def server(core):
             process.wait(timeout=5)
 
 
-def request(path, ipv6=True, invalid=False):
+def request(path, ipv6=True, invalid=False, core="sing-box"):
     node = {
         "protocol": "vless", "label": "Fixture", "host": "10.200.0.1", "port": 18443,
         "credential": WRONG_UUID if invalid else FIXTURE_UUID,
@@ -226,7 +226,7 @@ def request(path, ipv6=True, invalid=False):
         "wsHost": "", "wsPath": "", "flow": "",
     }
     path.write_text(json.dumps({
-        "schema": 1, "core": "sing-box",
+        "schema": 1, "core": core,
         "serverId": "b6d532a4-82a6-4390-ab6d-17cfe7f468e7",
         "subscriptionId": "e5e0cb97-cf16-4d13-9bc9-ad6da8182c61",
         "node": node,
@@ -273,11 +273,13 @@ def client(args):
             runtime.mkdir()
             state.mkdir()
             profile = directory / "request.json"
-            request(profile)
+            core_name = "xray" if args.xray else "sing-box"
+            request(profile, core=core_name)
 
             def driver():
                 process = subprocess.Popen(
-                    [args.driver, args.core, str(runtime), str(state), str(profile)],
+                    [args.driver, args.core, str(runtime), str(state), str(profile)]
+                    + ([args.xray] if args.xray else []),
                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0,
                 )
                 processes.append(process)
@@ -317,7 +319,7 @@ def client(args):
                 if network() != before:
                     (report / "failed-restoration.json").write_text(json.dumps(network(), indent=2))
                     raise RuntimeError("Сеть не восстановлена после отключения.")
-                request(profile, ipv6=False)
+                request(profile, ipv6=False, core=core_name)
                 send(helper, "start")
                 until_state(helper, "ready")
                 http_probe(TARGET4)
@@ -327,7 +329,7 @@ def client(args):
                 if network() != before:
                     (report / "failed-restoration.json").write_text(json.dumps(network(), indent=2))
                     raise RuntimeError("Сеть не восстановлена после IPv6 disable.")
-                request(profile, invalid=True)
+                request(profile, invalid=True, core=core_name)
                 send(helper, "start")
                 until_state(helper, "ready")
                 try:
@@ -338,7 +340,7 @@ def client(args):
                     raise RuntimeError("Неверный UUID не должен давать рабочее подключение.")
                 send(helper, "stop")
                 until_state(helper, "idle")
-                request(profile)
+                request(profile, core=core_name)
                 send(helper, "start")
                 until_state(helper, "ready")
                 send(helper, "kill-core")
@@ -364,8 +366,8 @@ def client(args):
                 raise RuntimeError("Обнаружены открытые DNS/target пакеты на физическом интерфейсе.")
             result = {
                 "scope": "isolated-linux-user-network-namespace",
-                "core": "sing-box", "protocol": "VLESS/TCP fixture",
-                "coreSha256": hashlib.sha256(pathlib.Path(args.core).read_bytes()).hexdigest(),
+                "core": core_name, "protocol": "VLESS/TCP fixture",
+                "coreSha256": hashlib.sha256(pathlib.Path(args.xray or args.core).read_bytes()).hexdigest(),
                 "tcp4": True, "tcp6": True, "udp4": True, "udp6": True,
                 "explicitDnsThroughTun": True, "ipv6DisabledBlocksTraffic": True,
                 "invalidCredentialsNoDirectFallback": True,
@@ -396,6 +398,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", required=True)
     parser.add_argument("--driver")
+    parser.add_argument("--xray")
     parser.add_argument("--report")
     parser.add_argument("--server", action="store_true")
     args = parser.parse_args()

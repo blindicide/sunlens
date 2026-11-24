@@ -3,9 +3,11 @@
 `ICoreAdapter` определяет capabilities, генерацию конфигурации и её проверку.
 `SingBoxAdapter` реализует эти операции для Linux-конфигурации sing-box 1.14.4.
 Запуск Linux TUN через отдельный helper реализован и частично проверен в
-изолированном VLESS-стенде; GUI подключён к IPC установленного помощника. XrayAdapter отсутствует.
+изолированном VLESS-стенде; GUI подключён к IPC установленного помощника.
+`XrayAdapter` использует отдельную схему Xray 26.11.9 и свой CLI validator
+`xray run -test -config`. Ядро выбирается в GUI до подключения.
 Полная матрица ещё не проверена. Capabilities явно возвращают verifiedTun=false и
-trafficCounters=false. Отсутствующий Xray не заменён заглушкой с фиктивным успехом.
+trafficCounters=false для внутренних счётчиков ядра; Linux helper читает netlink TUN L3.
 
 ## Закрепление
 
@@ -51,11 +53,24 @@ SHA-256 и фактическую версию **до** проверки кон�
 
 ```sh
 python3 tools/fetch-core.py --destination build/dependencies
-cmake --preset dev -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-box"
+python3 tools/fetch-core.py --core xray --destination build/dependencies
+cmake --preset dev -DSUNLENS_SING_BOX_EXECUTABLE="$PWD/build/dependencies/sing-box" \
+  -DSUNLENS_XRAY_EXECUTABLE="$PWD/build/dependencies/xray"
 cmake --build --preset dev
 ctest --preset dev
 ```
 
-Suite `sing-box-validation` не зарегистрирован без явно переданного executable.
-Linux CI обязан загрузить закреплённое ядро и включить suite; Windows пока
+Suites `sing-box-validation` и `xray-validation` требуют явно переданные executable.
+Linux CI обязан загрузить оба закреплённых ядра и включить suites; Windows пока
 собирает только unit/GUI tests. Это явно не полная матрица двух ОС/ядер.
+
+## Ограничения Xray/Linux
+
+Xray использует `tun`, `gateway`, `autoOutboundsInterface` и, на поддержанном
+systemd-resolved, `autoSystemDnsToGateway`. Помощник размещает default routes
+в отдельной таблице; `SO_MARK` для исходящих сокетов сначала выбирает main и
+при отсутствии такого маршрута блокируется до таблицы TUN. В режиме proxy
+UDP DNS из TUN уходит через proxy; при direct — через физический путь.
+DoH для Xray пока отклоняется, как и доменное имя upstream во избежание
+bootstrap-петли. Укажите числовой IP и, для TLS, соответствующий SNI.
+Изолированный тест отключает takeover системного resolver; это отдельный gate.

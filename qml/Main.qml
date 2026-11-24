@@ -114,7 +114,7 @@ ApplicationWindow {
             Button {
                 text: controller.tunnelState === "recovery-required" ? "Восстановить сеть"
                     : controller.tunnelActive ? "Отключить / отменить"
-                    : controller.tunnelAvailable ? "Подключить TUN · sing-box"
+                    : controller.tunnelAvailable ? "Подключить TUN · " + controller.selectedCore
                     : "Установленный сетевой помощник недоступен"
                 enabled: controller.tunnelActive || (controller.tunnelAvailable && controller.selectedId.length > 0)
                 onClicked: {
@@ -351,12 +351,19 @@ ApplicationWindow {
                     contentWidth: availableWidth
                     ColumnLayout {
                     width: parent.width
-                    Label { text: "Проверка sing-box · Linux x86_64"; font.bold: true }
+                    Label { text: "Выбор и проверка ядра · Linux x86_64"; font.bold: true }
+                    ComboBox {
+                        model: ["sing-box", "xray"]
+                        currentIndex: controller.selectedCore === "xray" ? 1 : 0
+                        onActivated: controller.selectedCore = currentText
+                        enabled: !controller.tunnelActive && !controller.coreBusy
+                        Accessible.name: "Ядро TUN"
+                    }
                     TextField {
                         id: coreExecutable
                         Layout.fillWidth: true
                         text: controller.corePath
-                        placeholderText: "Абсолютный путь к закреплённому sing-box"
+                        placeholderText: "Абсолютный путь к закреплённому ядру"
                         Accessible.name: placeholderText
                     }
                     ComboBox {
@@ -384,7 +391,8 @@ ApplicationWindow {
                         CheckBox {
                             id: dnsHttps
                             text: "DNS over HTTPS"
-                            checked: true
+                            checked: controller.selectedCore !== "xray"
+                            enabled: controller.selectedCore !== "xray"
                             onCheckedChanged: dnsPort.value = checked ? 443 : 53
                         }
                         SpinBox {
@@ -406,8 +414,9 @@ ApplicationWindow {
                         Layout.fillWidth: true
                     }
                     Label {
-                        text: "Bootstrap имени VPN-сервера: отдельный прямой DoH к 1.1.1.1. "
-                              + "UDP DNS защищён туннелем только в proxy-режиме."
+                        text: controller.selectedCore === "xray"
+                            ? "Xray: числовой IP VPN-сервера, отдельный SNI для TLS и UDP DNS."
+                            : "Bootstrap имени VPN-сервера: отдельный прямой DoH к 1.1.1.1."
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                     }
@@ -432,7 +441,7 @@ ApplicationWindow {
                             text: "SUNLENS " + appVersion
                                   + "\nQt " + qtVersion
                                   + "\nLinux TUN: отдельный установленный помощник / polkit"
-                                  + "\nXray: адаптер ещё не реализован"
+                                  + "\nЯдро: " + controller.selectedCore
                                   + "\nТрафик: kernel TUN L3, не байты физического upstream"
                                   + "\nНаличие TUN не доказывает авторизацию на VPN-сервере"
                                   + "\nКритерии выпуска v1.0.0 не выполнены."

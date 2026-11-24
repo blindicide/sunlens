@@ -25,6 +25,7 @@ class ApplicationController : public QObject {
     Q_PROPERTY(QString tunnelMessage READ tunnelMessage NOTIFY tunnelChanged)
     Q_PROPERTY(bool tunnelActive READ tunnelActive NOTIFY tunnelChanged)
     Q_PROPERTY(QVariantMap tunnelCounters READ tunnelCounters NOTIFY tunnelChanged)
+    Q_PROPERTY(QString selectedCore READ selectedCore WRITE setSelectedCore NOTIFY coreInfoChanged)
   public:
     explicit ApplicationController(
         ProfileRepository& repository,
@@ -43,6 +44,8 @@ class ApplicationController : public QObject {
     [[nodiscard]] QString tunnelMessage() const;
     [[nodiscard]] bool tunnelActive() const;
     [[nodiscard]] QVariantMap tunnelCounters() const;
+    [[nodiscard]] QString selectedCore() const;
+    void setSelectedCore(const QString& core);
 
     Q_INVOKABLE bool importText(const QString& text);
     Q_INVOKABLE bool addManual(const QString& protocol, const QString& host, int port,
@@ -83,6 +86,7 @@ class ApplicationController : public QObject {
     std::shared_ptr<const ICoreAdapter> adapter_;
     QFutureWatcher<ValidationResult> validation_;
     QString corePath_;
+    QString selectedCore_ = QStringLiteral("sing-box");
     QString coreStatus_ = QStringLiteral("Ядро ещё не проверено. TUN не реализован.");
     bool coreBusy_ = false;
     std::unique_ptr<ITunnelClient> tunnel_;

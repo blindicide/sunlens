@@ -6,7 +6,7 @@
 | Qt Test | Только тесты | Не включать в runtime-пакет |
 | SQLite через Qt SQL driver | Локальные данные | Проверить notices сборки driver |
 | sing-box 1.14.4 | Внешний checker (не bundled) | GPL-3.0-or-later и upstream naming restriction; распространение/полные notices не проверены |
-| Xray-core | Будущий внешний процесс | Пока не включён; требуется проверка MPL и dependency notices |
+| Xray-core 26.11.9 | Внешний Linux checker и TUN (не bundled) | MPL-2.0; распространение и полные dependency notices не проверены |
 | Wintun | Будущий Windows TUN | Пока не включён; проверить точную лицензию дистрибутива |
 
 SVG в `assets/` созданы для SUNLENS; сторонние обложки/логотипы не используются.

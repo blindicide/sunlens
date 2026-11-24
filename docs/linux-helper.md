@@ -64,8 +64,8 @@ cmake --build --preset dev
 ctest --preset dev --output-on-failure
 ```
 
-`linux-live-tun` создаёт изолированные user/network namespaces с veth upstream,
-настоящим sing-box VLESS-сервером и HTTP/UDP/DNS fixtures. Driver не устанавливается,
+`linux-live-tun` и `linux-live-xray` создают изолированные user/network namespaces
+с veth upstream, настоящим sing-box VLESS-сервером и HTTP/UDP/DNS fixtures. Driver не устанавливается,
 отказывается работать вне user namespace непривилегированного UID; перед тестом
 проверяется, что network namespace принадлежит этому user namespace.
 Проверены TCP/UDP × IPv4/IPv6, явный DNS, блокирование IPv6, неверный UUID без

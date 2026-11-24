@@ -13,6 +13,7 @@ struct LinuxTunnelPaths {
     QString resolvectl = QStringLiteral("/usr/bin/resolvectl");
     bool strictOwnership = true;
     bool systemDns = true;
+    QString xray;
 };
 
 class LinuxTunnelPlatform final : public ITunnelPlatform {

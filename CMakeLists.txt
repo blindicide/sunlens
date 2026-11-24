@@ -23,6 +23,9 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS dependencies.json
 string(JSON SING_BOX_VERSION GET "${SUNLENS_DEPENDENCIES}" cores sing-box version)
 string(JSON SING_BOX_LINUX_HASH GET "${SUNLENS_DEPENDENCIES}"
     cores sing-box assets linux-amd64 binarySha256)
+string(JSON XRAY_VERSION GET "${SUNLENS_DEPENDENCIES}" cores xray version)
+string(JSON XRAY_LINUX_HASH GET "${SUNLENS_DEPENDENCIES}"
+    cores xray assets linux-amd64 binarySha256)
 configure_file(cmake/core-dependencies.hpp.in generated/sunlens/core-dependencies.hpp @ONLY)
 
 qt_add_library(sunlens-domain STATIC
@@ -31,6 +34,9 @@ qt_add_library(sunlens-domain STATIC
     src/persistence/profile-repository.cpp
     src/app/application-controller.cpp
     src/core/sing-box-adapter.cpp
+    src/core/xray-adapter.cpp
+    src/core/core-options.cpp
+    src/core/external-core.cpp
     src/tunnel/tunnel-types.cpp
     src/tunnel/recovery-journal.cpp
     src/tunnel/tunnel-manager.cpp
@@ -99,12 +105,20 @@ if(BUILD_TESTING)
         set_tests_properties(${suite} PROPERTIES TIMEOUT 45)
     endforeach()
     set(SUNLENS_SING_BOX_EXECUTABLE "" CACHE FILEPATH "Путь к закреплённому sing-box для проверки")
+    set(SUNLENS_XRAY_EXECUTABLE "" CACHE FILEPATH "Путь к закреплённому Xray для проверки")
     if(SUNLENS_SING_BOX_EXECUTABLE)
         qt_add_executable(test-sing-box tests/integration/test-sing-box.cpp)
         target_link_libraries(test-sing-box PRIVATE sunlens-domain Qt6::Test)
         add_test(NAME sing-box-validation COMMAND test-sing-box)
         set_tests_properties(sing-box-validation PROPERTIES TIMEOUT 120
             ENVIRONMENT "SUNLENS_SING_BOX_EXECUTABLE=${SUNLENS_SING_BOX_EXECUTABLE}")
+    endif()
+    if(SUNLENS_XRAY_EXECUTABLE)
+        qt_add_executable(test-xray tests/integration/test-xray.cpp)
+        target_link_libraries(test-xray PRIVATE sunlens-domain Qt6::Test)
+        add_test(NAME xray-validation COMMAND test-xray)
+        set_tests_properties(xray-validation PROPERTIES TIMEOUT 120
+            ENVIRONMENT "SUNLENS_XRAY_EXECUTABLE=${SUNLENS_XRAY_EXECUTABLE}")
     endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         qt_add_executable(tunnel-test-driver tests/integration/tunnel-driver.cpp)
@@ -119,6 +133,14 @@ if(BUILD_TESTING)
                 --core "${SUNLENS_SING_BOX_EXECUTABLE}" --driver "$<TARGET_FILE:tunnel-test-driver>"
                 --report "${CMAKE_CURRENT_BINARY_DIR}/evidence/linux-tun")
             set_tests_properties(linux-live-tun PROPERTIES TIMEOUT 180 LABELS "live-tun;isolated")
+            if(SUNLENS_XRAY_EXECUTABLE)
+                add_test(NAME linux-live-xray COMMAND unshare --user --map-root-user --mount --net
+                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/linux-tun.py"
+                    --core "${SUNLENS_SING_BOX_EXECUTABLE}" --xray "${SUNLENS_XRAY_EXECUTABLE}"
+                    --driver "$<TARGET_FILE:tunnel-test-driver>"
+                    --report "${CMAKE_CURRENT_BINARY_DIR}/evidence/linux-xray")
+                set_tests_properties(linux-live-xray PROPERTIES TIMEOUT 180 LABELS "live-tun;isolated")
+            endif()
         endif()
     endif()
     add_test(NAME app-version COMMAND sunlens --version)
