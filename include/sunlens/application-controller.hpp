@@ -1,10 +1,12 @@
 #pragma once
 
+#include "sunlens/analytics.hpp"
 #include "sunlens/core-adapter.hpp"
 #include "sunlens/subscription-manager.hpp"
 #include "sunlens/tunnel-client.hpp"
 
 #include <QFutureWatcher>
+#include <QTcpSocket>
 #include <QVariantList>
 #include <memory>
 
@@ -26,6 +28,13 @@ class ApplicationController : public QObject {
     Q_PROPERTY(bool tunnelActive READ tunnelActive NOTIFY tunnelChanged)
     Q_PROPERTY(QVariantMap tunnelCounters READ tunnelCounters NOTIFY tunnelChanged)
     Q_PROPERTY(QString selectedCore READ selectedCore WRITE setSelectedCore NOTIFY coreInfoChanged)
+    Q_PROPERTY(QVariantMap analyticsSummary READ analyticsSummary NOTIFY analyticsChanged)
+    Q_PROPERTY(QVariantList analyticsServers READ analyticsServers NOTIFY analyticsChanged)
+    Q_PROPERTY(
+        QVariantList analyticsSubscriptions READ analyticsSubscriptions NOTIFY analyticsChanged)
+    Q_PROPERTY(QVariantList analyticsHistory READ analyticsHistory NOTIFY analyticsChanged)
+    Q_PROPERTY(int analyticsRetention READ analyticsRetention NOTIFY analyticsChanged)
+    Q_PROPERTY(QString probeStatus READ probeStatus NOTIFY analyticsChanged)
   public:
     explicit ApplicationController(
         ProfileRepository& repository,
@@ -46,6 +55,12 @@ class ApplicationController : public QObject {
     [[nodiscard]] QVariantMap tunnelCounters() const;
     [[nodiscard]] QString selectedCore() const;
     void setSelectedCore(const QString& core);
+    [[nodiscard]] QVariantMap analyticsSummary() const;
+    [[nodiscard]] QVariantList analyticsServers() const;
+    [[nodiscard]] QVariantList analyticsSubscriptions() const;
+    [[nodiscard]] QVariantList analyticsHistory() const;
+    [[nodiscard]] int analyticsRetention() const;
+    [[nodiscard]] QString probeStatus() const;
 
     Q_INVOKABLE bool importText(const QString& text);
     Q_INVOKABLE bool addManual(const QString& protocol, const QString& host, int port,
@@ -63,6 +78,8 @@ class ApplicationController : public QObject {
     Q_INVOKABLE void stopTunnel();
     Q_INVOKABLE void recoverTunnel();
     Q_INVOKABLE void disconnectAndQuit();
+    Q_INVOKABLE void setAnalyticsRetention(int days);
+    Q_INVOKABLE void probeSelectedServer();
 
   signals:
     void profilesChanged();
@@ -71,13 +88,18 @@ class ApplicationController : public QObject {
     void coreInfoChanged();
     void tunnelChanged();
     void quitReady();
+    void analyticsChanged();
 
   private:
     void reload();
     void setMessage(const QString& text);
     void appendManual(const QVector<Node>& nodes);
+    void recordTunnelStatus(const QJsonObject& status, bool changedState);
+    void reloadAnalytics();
+    void finishProbe(bool success);
 
     ProfileRepository& repository_;
+    AnalyticsRepository analytics_;
     SubscriptionManager manager_;
     QVariantList servers_;
     QVariantList subscriptions_;
@@ -94,6 +116,19 @@ class ApplicationController : public QObject {
     QString tunnelMessage_ = QStringLiteral("Не подключено. Запрос изменения сети не отправлялся.");
     QVariantMap tunnelCounters_;
     bool quitRequested_ = false;
+    std::optional<TrafficIdentity> trafficIdentity_;
+    std::optional<TrafficIdentity> probeIdentity_;
+    QElapsedTimer measuredPoll_;
+    QElapsedTimer probeClock_;
+    QTcpSocket probeSocket_;
+    QTimer probeDeadline_;
+    QVariantMap analyticsSummary_;
+    QVariantList analyticsServers_;
+    QVariantList analyticsSubscriptions_;
+    QVariantList analyticsHistory_;
+    int analyticsRetention_ = 30;
+    qint64 lastHistoryPrune_ = 0;
+    QString probeStatus_ = QStringLiteral("TCP-проба не запускалась.");
 };
 
 } // namespace sunlens

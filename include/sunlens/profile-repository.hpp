@@ -7,6 +7,8 @@
 
 namespace sunlens {
 
+class AnalyticsRepository;
+
 class ProfileRepository {
   public:
     explicit ProfileRepository(const QString& path);
@@ -26,6 +28,7 @@ class ProfileRepository {
     [[nodiscard]] static QString manualGroupId();
 
   private:
+    friend class AnalyticsRepository;
     QString connectionName_;
     QSqlDatabase db_;
 };

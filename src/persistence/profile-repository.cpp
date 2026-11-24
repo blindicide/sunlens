@@ -51,7 +51,7 @@ ProfileRepository::ProfileRepository(const QString& path)
             throw Error(QStringLiteral("Не удалось прочитать версию схемы SQLite."));
         const int schema = version.value(0).toInt();
         version.finish();
-        if (schema > 1)
+        if (schema > 2)
             throw Error(
                 QStringLiteral("База создана более новой версией SUNLENS. Обновите приложение."));
         if (!db_.transaction())
@@ -70,7 +70,20 @@ ProfileRepository::ProfileRepository(const QString& path)
         statement(db_,
                   QStringLiteral(
                       "CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT)"));
-        statement(db_, QStringLiteral("PRAGMA user_version=1"));
+        statement(db_, QStringLiteral(
+                           "CREATE TABLE IF NOT EXISTS traffic_sessions("
+                           "session TEXT PRIMARY KEY,server TEXT NOT NULL,"
+                           "subscription TEXT NOT NULL,core TEXT NOT NULL,raw_up INTEGER NOT NULL,"
+                           "raw_down INTEGER NOT NULL,updated_ms INTEGER NOT NULL,"
+                           "total_up INTEGER NOT NULL,total_down INTEGER NOT NULL)"));
+        statement(db_, QStringLiteral(
+                           "CREATE TABLE IF NOT EXISTS analytics_history("
+                           "row_id INTEGER PRIMARY KEY,at_ms INTEGER NOT NULL,"
+                           "server TEXT NOT NULL,subscription TEXT NOT NULL,core TEXT NOT NULL,"
+                           "kind TEXT NOT NULL,upload INTEGER,download INTEGER,latency INTEGER)"));
+        statement(db_, QStringLiteral("CREATE INDEX IF NOT EXISTS analytics_time "
+                                      "ON analytics_history(at_ms)"));
+        statement(db_, QStringLiteral("PRAGMA user_version=2"));
         if (!db_.commit())
             throw Error(QStringLiteral("Не удалось сохранить схему SQLite."));
         QSqlQuery manual(db_);

@@ -33,6 +33,8 @@ qt_add_library(sunlens-domain STATIC
     src/subscriptions/subscription-manager.cpp
     src/persistence/profile-repository.cpp
     src/app/application-controller.cpp
+    src/app/controller-analytics.cpp
+    src/analytics/analytics-repository.cpp
     src/core/sing-box-adapter.cpp
     src/core/xray-adapter.cpp
     src/core/core-options.cpp
@@ -98,7 +100,7 @@ if(BUILD_TESTING)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(NAME core-acquisition
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/test-fetch-core.py")
-    foreach(suite IN ITEMS profiles subscriptions core tunnel)
+    foreach(suite IN ITEMS profiles subscriptions core tunnel analytics)
         qt_add_executable(test-${suite} tests/unit/test-${suite}.cpp)
         target_link_libraries(test-${suite} PRIVATE sunlens-domain Qt6::Test)
         add_test(NAME ${suite} COMMAND test-${suite})

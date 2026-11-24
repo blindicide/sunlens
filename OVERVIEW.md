@@ -20,6 +20,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `qml/Main.qml` — интерфейс и явное состояние недоступности TUN.
 - `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
 - `src/persistence/` — SQLite-профили, подписки и preferences.
+- `src/analytics/` — SQLite-дельты TUN, история событий, пробы и агрегаты.
 - `src/core/` — Linux sing-box config и проверка версии/хеша/схемы.
 - `src/tunnel/` — типизированные запросы, атомарный журнал и state machine.
 - `src/tunnel/helper-client.cpp` — ограниченный GUI IPC-клиент с авторизованным handshake.

@@ -8,7 +8,8 @@ namespace sunlens {
 ApplicationController::ApplicationController(ProfileRepository& repository,
                                              std::shared_ptr<const ICoreAdapter> adapter,
                                              QObject* parent, std::unique_ptr<ITunnelClient> tunnel)
-    : QObject(parent), repository_(repository), manager_(repository), adapter_(std::move(adapter)),
+    : QObject(parent), repository_(repository), analytics_(repository), manager_(repository),
+      adapter_(std::move(adapter)),
       tunnel_(tunnel ? std::move(tunnel) : std::make_unique<HelperClient>()) {
     if (!adapter_)
         throw Error(QStringLiteral("Не задан адаптер ядра."));
@@ -18,18 +19,39 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
         corePath_ = repository_.preference(QStringLiteral("xray-path"));
     }
     connect(tunnel_.get(), &ITunnelClient::statusReceived, this, [this](const QJsonObject& status) {
+        const auto previous = tunnelState_;
+        const auto previousCounters = tunnelCounters_;
         tunnelState_ = status["state"].toString();
         tunnelMessage_ = status["message"].toString();
         tunnelCounters_ = QVariantMap{{"available", status["countersAvailable"].toBool()},
                                       {"upload", status["upload"].toString()},
                                       {"download", status["download"].toString()},
                                       {"source", status["counterSource"].toString()}};
+        if (previous == "ready" && tunnelState_ == "ready" &&
+            status["countersAvailable"].toBool()) {
+            for (const auto& key : {QStringLiteral("uploadRate"), QStringLiteral("downloadRate")}) {
+                if (previousCounters.contains(key))
+                    tunnelCounters_.insert(key, previousCounters.value(key));
+            }
+        }
+        try {
+            recordTunnelStatus(status, previous != tunnelState_);
+        } catch (const Error& error) {
+            setMessage(QString::fromUtf8(error.what()));
+        }
         emit tunnelChanged();
         if (quitRequested_ && tunnelState_ == "idle") {
             quitRequested_ = false;
             emit quitReady();
         }
     });
+    const auto retention = repository_.preference(QStringLiteral("analytics-retention")).toInt();
+    if (retention >= 1 && retention <= 3650)
+        analyticsRetention_ = retention;
+    probeDeadline_.setSingleShot(true);
+    connect(&probeDeadline_, &QTimer::timeout, this, [this] { finishProbe(false); });
+    connect(&probeSocket_, &QAbstractSocket::connected, this, [this] { finishProbe(true); });
+    connect(&probeSocket_, &QAbstractSocket::errorOccurred, this, [this] { finishProbe(false); });
     connect(&validation_, &QFutureWatcher<ValidationResult>::finished, this, [this] {
         const auto result = validation_.result();
         coreBusy_ = false;
@@ -47,6 +69,9 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
         reload();
     });
     reload();
+    lastHistoryPrune_ = QDateTime::currentMSecsSinceEpoch();
+    analytics_.prune(lastHistoryPrune_, analyticsRetention_);
+    reloadAnalytics();
 }
 
 QVariantList ApplicationController::servers() const { return servers_; }
@@ -264,6 +289,10 @@ void ApplicationController::startTunnel(int routing, bool bypassLan, bool ipv6,
             request.options.ipv6 = ipv6;
             request.options.dns = {dnsAddress.trimmed(), dnsPort, dnsHttps, dnsTlsName.trimmed()};
             (void)TunnelRequest::fromJson(request.toJson());
+            if (probeIdentity_)
+                finishProbe(false);
+            trafficIdentity_ = TrafficIdentity{{}, server.id, server.subscriptionId, request.core};
+            measuredPoll_.invalidate();
             tunnel_->start(request);
             return;
         }

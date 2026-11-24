@@ -145,6 +145,13 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
+            Label {
+                visible: controller.tunnelCounters.uploadRate !== undefined
+                text: visible ? "Скорость TUN: ↑ " + controller.tunnelCounters.uploadRate
+                    + " Б/с · ↓ " + controller.tunnelCounters.downloadRate + " Б/с" : ""
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
             TabBar {
                 id: tabs
                 Layout.fillWidth: true
@@ -152,6 +159,7 @@ ApplicationWindow {
                 TabButton { text: "Импорт" }
                 TabButton { text: "Подписки" }
                 TabButton { text: "Диагностика" }
+                TabButton { text: "Аналитика" }
             }
             Label {
                 text: controller.message
@@ -449,7 +457,92 @@ ApplicationWindow {
                     }
                 }
             }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Label {
+                        text: "Всего через TUN · ↑ " + controller.analyticsSummary.upload
+                            + " Б · ↓ " + controller.analyticsSummary.download + " Б"
+                        font.bold: true
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        ComboBox {
+                            id: analyticsView
+                            model: ["История", "Серверы", "Подписки"]
+                            Accessible.name: "Раздел аналитики"
+                        }
+                        Label { text: "Хранить историю (дней):" }
+                        SpinBox {
+                            from: 1
+                            to: 3650
+                            editable: true
+                            value: controller.analyticsRetention
+                            onValueModified: controller.setAnalyticsRetention(value)
+                            Accessible.name: "Дни хранения истории"
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Button {
+                            text: "Измерить TCP-задержку"
+                            enabled: !controller.tunnelActive && controller.selectedId.length > 0
+                            onClicked: controller.probeSelectedServer()
+                            Accessible.description: "Прямое TCP-подключение без проверки VPN"
+                        }
+                        Label {
+                            text: controller.probeStatus
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    Label {
+                        text: "L3-счётчики включают IP-заголовки и не измеряют скорость сервера. "
+                            + "Агрегаты сохраняются независимо от срока истории."
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    ListView {
+                        id: analyticsList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: analyticsView.currentIndex === 0 ? controller.analyticsHistory
+                            : analyticsView.currentIndex === 1 ? controller.analyticsServers
+                            : controller.analyticsSubscriptions
+                        delegate: ItemDelegate {
+                            id: item
+                            required property var modelData
+                            width: analyticsList.width
+                            text: analyticsView.currentIndex === 0
+                                ? modelData.at + " · " + modelData.label + " · " + modelData.core
+                                    + " · " + (modelData.kind === "traffic"
+                                        ? "↑ " + modelData.upload + " Б / ↓ " + modelData.download + " Б"
+                                        : modelData.kind === "tcp-probe"
+                                            ? (modelData.latency === "-1" ? "TCP-проба: нет ответа"
+                                                : "TCP-проба: " + modelData.latency + " мс")
+                                            : ({
+                                                idle: "Отключено", authorizing: "Подтверждение прав",
+                                                starting: "Запуск", ready: "TUN активен",
+                                                stopping: "Остановка", error: "Ошибка",
+                                                "recovery-required": "Требуется восстановление",
+                                                "counter-reset": "Сброс счётчика"
+                                            })[modelData.kind] || "Событие")
+                                : modelData.label + " · ↑ " + modelData.upload + " Б · ↓ "
+                                    + modelData.download + " Б"
+                            contentItem: Label {
+                                text: item.text
+                                textFormat: Text.PlainText
+                                elide: Text.ElideRight
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+                    Label { text: "Нет сохранённых данных."; visible: analyticsList.count === 0 }
+                }
+            }
         }
     }
-}
 }
