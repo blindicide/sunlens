@@ -8,10 +8,11 @@
 namespace sunlens {
 namespace {
 
-QJsonObject stream(const Node& node, const CoreOptions& options) {
+QJsonObject stream(const Node& node, int routeMark) {
     QJsonObject result{{"network", node.transport == "ws" ? "ws" : "raw"},
-                       {"security", node.tls ? "tls" : "none"},
-                       {"sockopt", QJsonObject{{"mark", options.tunnel.routeTable}}}};
+                       {"security", node.tls ? "tls" : "none"}};
+    if (routeMark > 0)
+        result.insert("sockopt", QJsonObject{{"mark", routeMark}});
     if (node.tls)
         result.insert(
             "tlsSettings",
@@ -26,7 +27,7 @@ QJsonObject stream(const Node& node, const CoreOptions& options) {
     return result;
 }
 
-QJsonObject proxy(const Node& node, const CoreOptions& options) {
+QJsonObject proxy(const Node& node, int routeMark) {
     QJsonObject settings;
     if (node.protocol == "vless" || node.protocol == "vmess") {
         QJsonObject user{{"id", node.credential}};
@@ -51,11 +52,18 @@ QJsonObject proxy(const Node& node, const CoreOptions& options) {
     return {{"tag", "proxy"},
             {"protocol", node.protocol},
             {"settings", settings},
-            {"streamSettings", stream(node, options)}};
+            {"streamSettings", stream(node, routeMark)}};
 }
 
 QJsonObject fieldRule(const QString& target) {
     return {{"type", "field"}, {"outboundTag", target}};
+}
+
+void requireNumericUpstream(const Node& node) {
+    QHostAddress upstream;
+    if (!upstream.setAddress(node.host))
+        throw Error(
+            QStringLiteral("Xray: укажите IP upstream и задайте SNI отдельно, если нужен TLS."));
 }
 
 } // namespace
@@ -69,10 +77,7 @@ QJsonDocument XrayAdapter::configuration(const Node& node, const CoreOptions& op
     options.validate();
     if (options.dns.https)
         throw Error(QStringLiteral("Xray: DoH ещё не проверен. Выберите UDP DNS внутри туннеля."));
-    QHostAddress upstream;
-    if (!upstream.setAddress(node.host))
-        throw Error(
-            QStringLiteral("Xray: укажите IP upstream и задайте SNI отдельно, если нужен TLS."));
+    requireNumericUpstream(node);
     QJsonArray rules;
     if (!options.ipv6) {
         auto block = fieldRule("block");
@@ -130,10 +135,28 @@ QJsonDocument XrayAdapter::configuration(const Node& node, const CoreOptions& op
              {"sniffing", QJsonObject{{"enabled", true},
                                       {"routeOnly", true},
                                       {"destOverride", QJsonArray{"http", "tls", "quic"}}}}}}},
-        {"outbounds", QJsonArray{proxy(node, options), direct,
+        {"outbounds", QJsonArray{proxy(node, tun.routeTable), direct,
                                  QJsonObject{{"tag", "dns-out"}, {"protocol", "dns"}},
                                  QJsonObject{{"tag", "block"}, {"protocol", "blackhole"}}}},
         {"routing", QJsonObject{{"domainStrategy", "AsIs"}, {"rules", rules}}}});
+}
+
+QJsonDocument XrayAdapter::profileCheckConfig(const Node& node, quint16 port, const QString& user,
+                                              const QString& password) {
+    node.validate();
+    requireNumericUpstream(node);
+    const QJsonObject settings{
+        {"auth", "password"},
+        {"accounts", QJsonArray{QJsonObject{{"user", user}, {"pass", password}}}},
+        {"udp", false}};
+    const QJsonObject inbound{{"protocol", "socks"},
+                              {"tag", "profile-check"},
+                              {"listen", "127.0.0.1"},
+                              {"port", port},
+                              {"settings", settings}};
+    return QJsonDocument(QJsonObject{{"log", QJsonObject{{"loglevel", "warning"}}},
+                                     {"inbounds", QJsonArray{inbound}},
+                                     {"outbounds", QJsonArray{proxy(node, 0)}}});
 }
 
 ValidationResult XrayAdapter::validate(const QString& executable,

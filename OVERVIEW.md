@@ -7,6 +7,7 @@ SUNLENS — настольный клиент для управления сто
 ```text
 QML → ApplicationController → ProfileRepository / SubscriptionManager
                            → ICoreAdapter → sing-box / Xray
+                           → checkProfile → HTTPS через выбранный профиль
                            → TunnelManager → привилегированный помощник ОС
                            → AnalyticsCollector → SQLite
 ```
@@ -21,7 +22,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
 - `src/persistence/` — SQLite-профили, подписки и preferences.
 - `src/analytics/` — SQLite-дельты TUN, история событий, пробы и агрегаты.
-- `src/core/` — Linux sing-box config и проверка версии/хеша/схемы.
+- `src/core/` — конфигурации Linux sing-box/Xray, проверка версий и профилей.
 - `src/tunnel/` — типизированные запросы, атомарный журнал и state machine.
 - `src/tunnel/helper-client.cpp` — ограниченный GUI IPC-клиент с авторизованным handshake.
 - `src/platform/linux/` — ограниченный helper и реальные сетевые операции.
@@ -44,6 +45,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 заменяет подписку атомарно с сохранением ID и пользовательских меток.
 `SubscriptionManager::fetch()/refresh()/cancel()` управляют ограниченным HTTP.
 `ApplicationController` предоставляет QML безопасные отображаемые поля и действия.
+`checkProfile()` проверяет HTTPS-ответ через конкретный профиль без запуска TUN.
 `SingBoxAdapter::configuration()` генерирует JSON без изменения сети;
 `validate()` проверяет закреплённый executable и выполняет `sing-box check`.
 `TunnelManager::start()/stop()/recover()` управляют сетевой транзакцией;

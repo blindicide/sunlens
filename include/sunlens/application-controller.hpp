@@ -2,6 +2,7 @@
 
 #include "sunlens/analytics.hpp"
 #include "sunlens/core-adapter.hpp"
+#include "sunlens/profile-check.hpp"
 #include "sunlens/subscription-manager.hpp"
 #include "sunlens/tunnel-client.hpp"
 
@@ -36,6 +37,9 @@ class ApplicationController : public QObject {
     Q_PROPERTY(QVariantList analyticsHistory READ analyticsHistory NOTIFY analyticsChanged)
     Q_PROPERTY(int analyticsRetention READ analyticsRetention NOTIFY analyticsChanged)
     Q_PROPERTY(QString probeStatus READ probeStatus NOTIFY analyticsChanged)
+    Q_PROPERTY(bool profileCheckAvailable READ profileCheckAvailable NOTIFY coreInfoChanged)
+    Q_PROPERTY(bool profileCheckBusy READ profileCheckBusy NOTIFY profileCheckChanged)
+    Q_PROPERTY(QString profileCheckStatus READ profileCheckStatus NOTIFY profileCheckChanged)
   public:
     explicit ApplicationController(
         ProfileRepository& repository,
@@ -63,6 +67,9 @@ class ApplicationController : public QObject {
     [[nodiscard]] QVariantList analyticsHistory() const;
     [[nodiscard]] int analyticsRetention() const;
     [[nodiscard]] QString probeStatus() const;
+    [[nodiscard]] bool profileCheckAvailable() const;
+    [[nodiscard]] bool profileCheckBusy() const;
+    [[nodiscard]] QString profileCheckStatus() const;
 
     Q_INVOKABLE bool importText(const QString& text);
     Q_INVOKABLE bool addManual(const QString& protocol, const QString& host, int port,
@@ -82,6 +89,7 @@ class ApplicationController : public QObject {
     Q_INVOKABLE void disconnectAndQuit();
     Q_INVOKABLE void setAnalyticsRetention(int days);
     Q_INVOKABLE void probeSelectedServer();
+    Q_INVOKABLE void checkSelectedProfile();
 
   signals:
     void profilesChanged();
@@ -91,6 +99,7 @@ class ApplicationController : public QObject {
     void tunnelChanged();
     void quitReady();
     void analyticsChanged();
+    void profileCheckChanged();
 
   private:
     void reload();
@@ -99,6 +108,7 @@ class ApplicationController : public QObject {
     void recordTunnelStatus(const QJsonObject& status, bool changedState);
     void reloadAnalytics();
     void finishProbe(bool success);
+    [[nodiscard]] QString installedCorePath() const;
 
     ProfileRepository& repository_;
     AnalyticsRepository analytics_;
@@ -132,6 +142,10 @@ class ApplicationController : public QObject {
     int analyticsRetention_ = 30;
     qint64 lastHistoryPrune_ = 0;
     QString probeStatus_ = QStringLiteral("TCP-проба не запускалась.");
+    QFutureWatcher<ProfileCheckResult> profileCheck_;
+    bool profileCheckBusy_ = false;
+    QString profileCheckServer_;
+    QString profileCheckStatus_;
 };
 
 } // namespace sunlens

@@ -105,7 +105,7 @@ void ApplicationController::setAnalyticsRetention(int days) {
 }
 
 void ApplicationController::probeSelectedServer() {
-    if (tunnelActive() || probeIdentity_) {
+    if (tunnelActive() || profileCheckBusy_ || probeIdentity_) {
         setMessage(
             QStringLiteral("TCP-проба доступна без активного TUN и только по одному запросу."));
         return;

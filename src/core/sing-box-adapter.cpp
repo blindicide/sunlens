@@ -127,6 +127,23 @@ QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions&
                                           {"rules", rules}}}});
 }
 
+QJsonDocument SingBoxAdapter::profileCheckConfig(const Node& node, quint16 port,
+                                                 const QString& user, const QString& password) {
+    node.validate();
+    const QJsonObject inbound{
+        {"type", "socks"},
+        {"tag", "profile-check"},
+        {"listen", "127.0.0.1"},
+        {"listen_port", port},
+        {"users", QJsonArray{QJsonObject{{"username", user}, {"password", password}}}}};
+    return QJsonDocument(QJsonObject{
+        {"log", QJsonObject{{"level", "info"}}},
+        {"dns", QJsonObject{{"servers", QJsonArray{doh("bootstrap", "direct")}}}},
+        {"inbounds", QJsonArray{inbound}},
+        {"outbounds", QJsonArray{outbound(node)}},
+        {"route", QJsonObject{{"default_domain_resolver", "bootstrap"}, {"final", "proxy"}}}});
+}
+
 ValidationResult SingBoxAdapter::validate(const QString& executable,
                                           const QJsonDocument& config) const {
     return validateExternalCore(executable, config,

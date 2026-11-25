@@ -52,6 +52,18 @@ ProcessResult runChecked(const QString& executable, const QStringList& arguments
 
 } // namespace
 
+void requirePinnedCoreBinary(const QString& executable, const QByteArray& sha256) {
+    const QFileInfo info(executable);
+    if (!info.isAbsolute() || !info.isFile() || !info.isExecutable() || info.isSymLink())
+        throw Error(QStringLiteral("Укажите абсолютный путь к обычному исполняемому файлу ядра."));
+    QFile binary(executable);
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!binary.open(QIODevice::ReadOnly) || !hash.addData(&binary) ||
+        hash.result().toHex() != sha256)
+        throw Error(
+            QStringLiteral("SHA-256 ядра не совпадает с закреплённым manifest. Запуск отменён."));
+}
+
 ValidationResult validateExternalCore(const QString& executable, const QJsonDocument& config,
                                       const CoreBinarySpec& spec) {
 #ifndef Q_OS_LINUX
@@ -60,20 +72,11 @@ ValidationResult validateExternalCore(const QString& executable, const QJsonDocu
     Q_UNUSED(spec)
     return {false, QStringLiteral("Проверка ядра пока реализована только для Linux x86_64."), {}};
 #else
-    const QFileInfo info(executable);
-    if (!info.isAbsolute() || !info.isFile() || !info.isExecutable() || info.isSymLink())
-        return {false,
-                QStringLiteral("Укажите абсолютный путь к обычному исполняемому файлу ядра."),
-                {}};
-    QFile binary(executable);
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    if (!binary.open(QIODevice::ReadOnly) || !hash.addData(&binary) ||
-        hash.result().toHex() != spec.hash)
-        return {
-            false,
-            QStringLiteral("SHA-256 ядра не совпадает с закреплённым manifest. Запуск отменён."),
-            {}};
-    binary.close();
+    try {
+        requirePinnedCoreBinary(executable, spec.hash);
+    } catch (const Error& error) {
+        return {false, QString::fromUtf8(error.what()), {}};
+    }
     const auto version = runChecked(executable, {QStringLiteral("version")});
     if (!version.ok || !version.output.startsWith(spec.versionPrefix))
         return {false, QStringLiteral("Не удалось подтвердить закреплённую версию ядра."), {}};

@@ -3,6 +3,11 @@
 #include <QUrl>
 #include <QtConcurrent>
 
+#ifdef Q_OS_LINUX
+#include "sunlens/helper-paths.hpp"
+#include "sunlens/linux-tunnel-platform.hpp"
+#endif
+
 namespace sunlens {
 
 ApplicationController::ApplicationController(ProfileRepository& repository,
@@ -58,6 +63,12 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
         coreStatus_ = result.message;
         emit coreInfoChanged();
     });
+    connect(&profileCheck_, &QFutureWatcher<ProfileCheckResult>::finished, this, [this] {
+        profileCheckBusy_ = false;
+        if (selectedId_ == profileCheckServer_)
+            profileCheckStatus_ = profileCheck_.result().message;
+        emit profileCheckChanged();
+    });
     connect(&manager_, &SubscriptionManager::busyChanged, this,
             &ApplicationController::busyChanged);
     connect(&manager_, &SubscriptionManager::failed, this, [this](const QString& error) {
@@ -81,11 +92,19 @@ QString ApplicationController::selectedLabel() const { return selectedLabel_; }
 QString ApplicationController::message() const { return message_; }
 bool ApplicationController::busy() const { return manager_.busy(); }
 bool ApplicationController::coreBusy() const { return coreBusy_; }
+QString ApplicationController::installedCorePath() const {
+#ifdef Q_OS_LINUX
+    const auto& path = selectedCore_ == "xray" ? InstalledXray : InstalledSingBox;
+    if (LinuxTunnelPlatform::trustedPath(path, true))
+        return path;
+#endif
+    return {};
+}
 QString ApplicationController::corePath() const { return corePath_; }
 QString ApplicationController::coreStatus() const { return coreStatus_; }
 QString ApplicationController::selectedCore() const { return selectedCore_; }
 void ApplicationController::setSelectedCore(const QString& core) {
-    if (coreBusy_ || tunnelActive() || core == selectedCore_ ||
+    if (coreBusy_ || profileCheckBusy_ || tunnelActive() || core == selectedCore_ ||
         (core != "sing-box" && core != "xray"))
         return;
     try {
@@ -94,6 +113,9 @@ void ApplicationController::setSelectedCore(const QString& core) {
         selectedCore_ = core;
         corePath_ = path;
         coreStatus_ = QStringLiteral("Выбранное ядро ещё не проверено.");
+        profileCheckServer_.clear();
+        profileCheckStatus_.clear();
+        emit profileCheckChanged();
         emit coreInfoChanged();
     } catch (const Error& error) {
         setMessage(QString::fromUtf8(error.what()));
@@ -143,6 +165,10 @@ void ApplicationController::reload() {
                                           {"updatedAt", entry.updatedAt},
                                           {"remote", !entry.url.isEmpty()},
                                           {"host", QUrl(entry.url).host()}});
+    }
+    if (profileCheckServer_ != selectedId_ && !profileCheckStatus_.isEmpty()) {
+        profileCheckStatus_.clear();
+        emit profileCheckChanged();
     }
     emit profilesChanged();
 }
@@ -199,6 +225,10 @@ void ApplicationController::fetchSubscription(const QString& url, const QString&
 void ApplicationController::refreshSubscription(const QString& id) { manager_.refresh(id); }
 void ApplicationController::cancelFetch() { manager_.cancel(); }
 void ApplicationController::selectServer(const QString& id) {
+    if (profileCheckBusy_ && id != selectedId_) {
+        setMessage(QStringLiteral("Дождитесь окончания проверки профиля."));
+        return;
+    }
     if (tunnelActive() && id != selectedId_) {
         setMessage(QStringLiteral("Сначала отключите TUN, затем выберите другой сервер."));
         return;
@@ -227,6 +257,10 @@ void ApplicationController::renameServer(const QString& id, const QString& label
 
 void ApplicationController::validateSelectedCore(const QString& executable, bool direct,
                                                  bool bypassLan, bool ipv6) {
+    if (profileCheckBusy_) {
+        setMessage(QStringLiteral("Дождитесь окончания проверки профиля."));
+        return;
+    }
     if (coreBusy_) {
         setMessage(QStringLiteral("Дождитесь окончания проверки ядра."));
         return;
@@ -271,9 +305,50 @@ void ApplicationController::validateSelectedCore(const QString& executable, bool
     }
 }
 
+bool ApplicationController::profileCheckAvailable() const { return !installedCorePath().isEmpty(); }
+bool ApplicationController::profileCheckBusy() const { return profileCheckBusy_; }
+QString ApplicationController::profileCheckStatus() const { return profileCheckStatus_; }
+
+void ApplicationController::checkSelectedProfile() {
+    if (tunnelActive() || coreBusy_ || profileCheckBusy_ || probeIdentity_) {
+        setMessage(QStringLiteral("Проверка профиля доступна только без TUN и других проверок."));
+        return;
+    }
+    try {
+        const auto path = installedCorePath();
+        if (path.isEmpty())
+            throw Error(QStringLiteral("Для проверки профиля нужно установленное ядро SUNLENS."));
+        for (const auto& server : repository_.servers()) {
+            if (server.id != selectedId_)
+                continue;
+            profileCheckServer_ = server.id;
+            profileCheckStatus_ = QStringLiteral("HTTPS-запрос через выбранный профиль…");
+            profileCheckBusy_ = true;
+            emit profileCheckChanged();
+            profileCheck_.setFuture(
+                QtConcurrent::run([path, node = server.node, core = selectedCore_] {
+                    try {
+                        return checkProfile(core, path, node);
+                    } catch (...) {
+                        return ProfileCheckResult{
+                            QStringLiteral("Не удалось завершить проверку профиля.")};
+                    }
+                }));
+            return;
+        }
+        throw Error(QStringLiteral("Сначала выберите сервер для проверки профиля."));
+    } catch (const Error& error) {
+        setMessage(QString::fromUtf8(error.what()));
+    }
+}
+
 void ApplicationController::startTunnel(int routing, bool bypassLan, bool ipv6,
                                         const QString& dnsAddress, int dnsPort, bool dnsHttps,
                                         const QString& dnsTlsName) {
+    if (profileCheckBusy_) {
+        setMessage(QStringLiteral("Дождитесь окончания проверки профиля."));
+        return;
+    }
     if (tunnelActive()) {
         setMessage(QStringLiteral("Текущий TUN нужно отключить или восстановить."));
         return;

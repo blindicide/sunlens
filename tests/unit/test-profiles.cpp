@@ -247,6 +247,8 @@ class ProfileTests : public QObject {
         QCOMPARE(controller.tunnelState(), QStringLiteral("starting"));
         observed->publish("ready");
         QCOMPARE(controller.tunnelState(), QStringLiteral("ready"));
+        controller.checkSelectedProfile();
+        QVERIFY(!controller.profileCheckBusy());
         QVERIFY(controller.tunnelCounters()["available"].toBool());
         QCOMPARE(controller.tunnelCounters()["upload"].toString(), QStringLiteral("123"));
         controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");

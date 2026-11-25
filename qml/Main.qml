@@ -167,12 +167,24 @@ ApplicationWindow {
                         Accessible.name: "Сервер: " + text
                     }
                     Button {
+                        text: controller.profileCheckBusy ? "Проверка…" : "Проверить профиль"
+                        visible: !controller.tunnelActive
+                        enabled: controller.profileCheckAvailable && !controller.profileCheckBusy
+                            && !controller.coreBusy && controller.selectedId.length > 0
+                        Layout.preferredHeight: 42
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 450
+                        ToolTip.text: "HTTPS-запрос к connectivitycheck.gstatic.com через профиль, без TUN."
+                        Accessible.description: ToolTip.text
+                        onClicked: controller.checkSelectedProfile()
+                    }
+                    Button {
                         text: controller.tunnelState === "recovery-required" ? "Восстановить сеть"
                             : controller.tunnelState === "authorizing" ? "Отменить"
                             : controller.tunnelActive ? "Отключить" : "Подключиться"
                         highlighted: true
                         enabled: controller.tunnelState !== "stopping" && (controller.tunnelActive
-                            || (controller.tunnelAvailable && !controller.coreBusy
+                            || (controller.tunnelAvailable && !controller.coreBusy && !controller.profileCheckBusy
                                 && controller.selectedId.length > 0))
                         onClicked: {
                             if (controller.tunnelState === "recovery-required")
@@ -189,6 +201,14 @@ ApplicationWindow {
                     }
                 }
 
+                Label {
+                    text: controller.profileCheckStatus
+                    visible: text.length > 0 && !controller.tunnelActive
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Accessible.name: "Результат проверки профиля: " + text
+                }
                 Label {
                     visible: text.length > 0
                     text: !controller.tunnelAvailable
@@ -266,7 +286,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             highlighted: controller.selectedId === modelData.id
-                            enabled: !controller.coreBusy && !controller.tunnelActive
+                            enabled: !controller.coreBusy && !controller.profileCheckBusy && !controller.tunnelActive
                             onClicked: controller.selectServer(modelData.id)
                             Accessible.description: "Выбрать сервер; подключение не выполняется"
                         }
@@ -435,7 +455,7 @@ ApplicationWindow {
                         model: ["sing-box", "xray"]
                         currentIndex: controller.selectedCore === "xray" ? 1 : 0
                         onActivated: controller.selectedCore = currentText
-                        enabled: !controller.tunnelActive && !controller.coreBusy
+                        enabled: !controller.tunnelActive && !controller.coreBusy && !controller.profileCheckBusy
                         Accessible.name: "Ядро TUN"
                     }
                     TextField {
@@ -501,7 +521,8 @@ ApplicationWindow {
                     }
                     Button {
                         text: controller.coreBusy ? "Проверка…" : "Проверить конфигурацию"
-                        enabled: !controller.coreBusy && controller.selectedId.length > 0
+                        enabled: !controller.coreBusy && !controller.profileCheckBusy
+                            && controller.selectedId.length > 0
                         onClicked: controller.validateSelectedCore(coreExecutable.text,
                             routing.currentIndex === 1, lan.checked, ipv6.checked)
                     }
@@ -559,7 +580,8 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Button {
                             text: "Измерить TCP-задержку"
-                            enabled: !controller.tunnelActive && controller.selectedId.length > 0
+                            enabled: !controller.tunnelActive && !controller.profileCheckBusy
+                                && controller.selectedId.length > 0
                             onClicked: controller.probeSelectedServer()
                             Accessible.description: "Прямое TCP-подключение без проверки VPN"
                         }

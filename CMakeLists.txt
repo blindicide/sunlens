@@ -39,6 +39,7 @@ qt_add_library(sunlens-domain STATIC
     src/core/xray-adapter.cpp
     src/core/core-options.cpp
     src/core/external-core.cpp
+    src/core/profile-check.cpp
     src/tunnel/tunnel-types.cpp
     src/tunnel/recovery-journal.cpp
     src/tunnel/tunnel-manager.cpp
@@ -129,6 +130,24 @@ if(BUILD_TESTING)
             ENVIRONMENT "SUNLENS_XRAY_EXECUTABLE=${SUNLENS_XRAY_EXECUTABLE}")
     endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        if(SUNLENS_SING_BOX_EXECUTABLE OR SUNLENS_XRAY_EXECUTABLE)
+            find_program(SUNLENS_OPENSSL_CLI openssl REQUIRED)
+            qt_add_executable(profile-check-driver tests/integration/profile-check-driver.cpp)
+            target_link_libraries(profile-check-driver PRIVATE sunlens-domain)
+            foreach(core IN ITEMS sing-box xray)
+                string(TOUPPER "${core}" core_variable)
+                string(REPLACE "-" "_" core_variable "${core_variable}")
+                if(SUNLENS_${core_variable}_EXECUTABLE)
+                    add_test(NAME "${core}-profile-check"
+                        COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/profile-check.py"
+                        --name "${core}" --binary "${SUNLENS_${core_variable}_EXECUTABLE}"
+                        --driver "$<TARGET_FILE:profile-check-driver>"
+                        --openssl "${SUNLENS_OPENSSL_CLI}")
+                    set_tests_properties("${core}-profile-check" PROPERTIES TIMEOUT 90)
+                endif()
+            endforeach()
+        endif()
         qt_add_executable(tunnel-test-driver tests/integration/tunnel-driver.cpp)
         target_link_libraries(tunnel-test-driver PRIVATE sunlens-domain)
         option(SUNLENS_ENABLE_NAMESPACE_TESTS "Живые тесты в отдельном user/network namespace" OFF)

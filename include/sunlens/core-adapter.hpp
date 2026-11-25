@@ -73,6 +73,9 @@ class SingBoxAdapter final : public ICoreAdapter {
                                               const CoreOptions& options) const override;
     [[nodiscard]] ValidationResult validate(const QString& executable,
                                             const QJsonDocument& config) const override;
+    [[nodiscard]] static QJsonDocument profileCheckConfig(const Node& node, quint16 port,
+                                                          const QString& user,
+                                                          const QString& password);
 };
 
 class XrayAdapter final : public ICoreAdapter {
@@ -82,6 +85,9 @@ class XrayAdapter final : public ICoreAdapter {
                                               const CoreOptions& options) const override;
     [[nodiscard]] ValidationResult validate(const QString& executable,
                                             const QJsonDocument& config) const override;
+    [[nodiscard]] static QJsonDocument profileCheckConfig(const Node& node, quint16 port,
+                                                          const QString& user,
+                                                          const QString& password);
 };
 
 } // namespace sunlens
