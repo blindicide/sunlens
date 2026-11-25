@@ -17,7 +17,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 ## Структура
 
 - `src/app/main.cpp` — запуск Qt, версия, проверка загрузки QML.
-- `qml/Main.qml` — интерфейс и явное состояние недоступности TUN.
+- `qml/Main.qml` — карточка подключения, профили, настройки и аналитика.
 - `src/subscriptions/` — строгий парсер и ограниченный асинхронный fetch.
 - `src/persistence/` — SQLite-профили, подписки и preferences.
 - `src/analytics/` — SQLite-дельты TUN, история событий, пробы и агрегаты.

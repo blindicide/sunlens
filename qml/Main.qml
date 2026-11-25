@@ -4,14 +4,40 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
-    width: 1120
-    height: 760
-    minimumWidth: 760
-    minimumHeight: 580
+    width: 960
+    height: 720
+    minimumWidth: 680
+    minimumHeight: 600
     visible: true
     title: "SUNLENS " + appVersion + " · 5КР001-1"
     color: palette.window
     property bool allowExit: false
+    readonly property bool darkTheme: palette.window.hslLightness < 0.5
+    readonly property color panelBorder: Qt.alpha(palette.windowText, 0.14)
+    readonly property bool needsAttention: controller.tunnelState === "error"
+        || controller.tunnelState === "recovery-required"
+    readonly property color stateColor: needsAttention ? (darkTheme ? "#f3ae8d" : "#963b22")
+        : controller.tunnelState === "ready" ? (darkTheme ? "#9ed6ba" : "#246449")
+        : palette.windowText
+
+    function formatBytes(bytes) {
+        let amount = Number(bytes)
+        if (!Number.isFinite(amount) || amount < 0)
+            return "—"
+        const units = ["Б", "КБ", "МБ", "ГБ"]
+        let unit = 0
+        while (amount >= 1024 && unit < units.length - 1) {
+            amount /= 1024
+            ++unit
+        }
+        if (unit > 0 && unit < units.length - 1 && Math.round(amount * 10) >= 10240) {
+            amount /= 1024
+            ++unit
+        }
+        const precision = unit > 0 && Math.round(amount * 10) % 10 !== 0 ? 1 : 0
+        return amount.toLocaleString(Qt.locale("ru_RU"), "f", precision) + " " + units[unit]
+    }
+
     onClosing: function(event) {
         if (controller.tunnelActive && !allowExit) {
             event.accepted = false
@@ -60,105 +86,150 @@ ApplicationWindow {
     Image {
         anchors.fill: parent
         source: "qrc:/qt/qml/Sunlens/assets/pattern.svg"
-        sourceSize: Qt.size(600, 320)
         fillMode: Image.Tile
+        opacity: window.darkTheme ? 0.24 : 0.15
     }
 
-    RowLayout {
-        anchors.fill: parent
-        anchors.margins: 24
-        spacing: 28
+    ColumnLayout {
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: 20
+        anchors.bottomMargin: 20
+        width: Math.min(parent.width - 48, 840)
+        spacing: 12
 
-        ColumnLayout {
-            Layout.preferredWidth: 190
-            Layout.fillHeight: true
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
             Image {
                 source: "qrc:/qt/qml/Sunlens/assets/logo.svg"
-                sourceSize: Qt.size(112, 112)
-                Layout.preferredWidth: 112
-                Layout.preferredHeight: 112
-                Accessible.name: "SUNLENS"
+                sourceSize: Qt.size(40, 40)
+                Layout.preferredWidth: 40
+                Layout.preferredHeight: 40
             }
-            Label { text: "5КР001-1"; opacity: 0.65 }
-            Label { text: "Профили и подписки"; font.bold: true; Layout.topMargin: 24 }
             Label {
-                text: "Локальное хранение\nБез передачи телеметрии"
-                wrapMode: Text.WordWrap
-                opacity: 0.7
+                text: "SUNLENS"
+                font.pixelSize: 21
+                font.bold: true
                 Layout.fillWidth: true
             }
-            Item { Layout.fillHeight: true }
-            Label { text: "Версия " + appVersion + "\nПредварительная сборка"; opacity: 0.65 }
+            Label { text: "5КР001-1  ·  " + appVersion }
         }
 
-        ColumnLayout {
+        Pane {
+            Layout.fillWidth: true
+            padding: 18
+            background: Rectangle {
+                color: window.palette.base
+                border.color: window.panelBorder
+                radius: 14
+            }
+            contentItem: ColumnLayout {
+                spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Rectangle {
+                        implicitWidth: 8
+                        implicitHeight: 8
+                        radius: 4
+                        color: window.stateColor
+                    }
+                    Label {
+                        text: ({
+                            idle: "Отключено",
+                            authorizing: "Подтверждение прав администратора",
+                            starting: "Настройка туннеля",
+                            ready: "Туннель активен",
+                            stopping: "Восстановление сети",
+                            error: "Ошибка подключения",
+                            "recovery-required": "Требуется восстановление сети"
+                        })[controller.tunnelState] || "Состояние неизвестно"
+                        color: window.stateColor
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    Label { text: controller.selectedCore }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    Label {
+                        text: controller.selectedLabel || "Выберите сервер"
+                        textFormat: Text.PlainText
+                        font.pixelSize: 23
+                        font.bold: true
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Accessible.name: "Сервер: " + text
+                    }
+                    Button {
+                        text: controller.tunnelState === "recovery-required" ? "Восстановить сеть"
+                            : controller.tunnelState === "authorizing" ? "Отменить"
+                            : controller.tunnelActive ? "Отключить" : "Подключиться"
+                        highlighted: true
+                        enabled: controller.tunnelState !== "stopping" && (controller.tunnelActive
+                            || (controller.tunnelAvailable && !controller.coreBusy
+                                && controller.selectedId.length > 0))
+                        onClicked: {
+                            if (controller.tunnelState === "recovery-required")
+                                controller.recoverTunnel()
+                            else if (controller.tunnelActive)
+                                controller.stopTunnel()
+                            else
+                                controller.startTunnel(routing.currentIndex, lan.checked, ipv6.checked,
+                                    dnsAddress.text, dnsPort.value, dnsHttps.checked, dnsName.text)
+                        }
+                        Layout.minimumWidth: 150
+                        Layout.preferredHeight: 42
+                        Accessible.description: "Изменение сети выполняет помощник после подтверждения polkit"
+                    }
+                }
+
+                Label {
+                    visible: text.length > 0
+                    text: !controller.tunnelAvailable
+                        ? "Для подключения установите пакет SUNLENS с сетевым помощником и polkit."
+                        : controller.tunnelState === "idle" ? "" : controller.tunnelMessage
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Label {
+                    visible: controller.tunnelCounters.available === true
+                    text: !visible ? "" : "Трафик TUN: ↑ "
+                        + window.formatBytes(controller.tunnelCounters.upload) + "  ·  ↓ "
+                        + window.formatBytes(controller.tunnelCounters.download)
+                        + (controller.tunnelCounters.uploadRate === undefined ? "" : "     Скорость: ↑ "
+                            + window.formatBytes(controller.tunnelCounters.uploadRate) + "/с  ·  ↓ "
+                            + window.formatBytes(controller.tunnelCounters.downloadRate) + "/с")
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+
+        Pane {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 16
-            Label { text: "Ваше подключение"; font.pixelSize: 30; font.bold: true }
-            Label {
-                text: ({
-                    idle: "Не подключено",
-                    authorizing: "Подтверждение прав администратора",
-                    starting: "Настройка TUN",
-                    ready: "Туннель активен · доступность сервера не подтверждена",
-                    stopping: "Восстановление сети",
-                    error: "Ошибка подключения",
-                    "recovery-required": "Требуется восстановление сети"
-                })[controller.tunnelState] || "Состояние неизвестно"
-                font.pixelSize: 16
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                Accessible.role: Accessible.StaticText
+            padding: 14
+            background: Rectangle {
+                color: window.palette.base
+                border.color: window.panelBorder
+                radius: 14
             }
-            Button {
-                text: controller.tunnelState === "recovery-required" ? "Восстановить сеть"
-                    : controller.tunnelActive ? "Отключить / отменить"
-                    : controller.tunnelAvailable ? "Подключить TUN · " + controller.selectedCore
-                    : "Установленный сетевой помощник недоступен"
-                enabled: controller.tunnelActive || (controller.tunnelAvailable && controller.selectedId.length > 0)
-                onClicked: {
-                    if (controller.tunnelState === "recovery-required")
-                        controller.recoverTunnel()
-                    else if (controller.tunnelActive)
-                        controller.stopTunnel()
-                    else
-                        controller.startTunnel(routing.currentIndex, lan.checked, ipv6.checked,
-                            dnsAddress.text, dnsPort.value, dnsHttps.checked, dnsName.text)
-                }
-                Layout.preferredHeight: 52
-                Layout.fillWidth: true
-                Accessible.description: "Изменение сети выполняет отдельный помощник после подтверждения polkit"
-            }
-            Label {
-                text: controller.tunnelMessage
-                textFormat: Text.PlainText
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-            Label {
-                text: controller.tunnelCounters.available
-                    ? "Трафик TUN: ↑ " + controller.tunnelCounters.upload + " Б · ↓ "
-                        + controller.tunnelCounters.download + " Б · уровень L3"
-                    : "Счётчики TUN сейчас недоступны"
-                opacity: 0.75
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-            }
-            Label {
-                visible: controller.tunnelCounters.uploadRate !== undefined
-                text: visible ? "Скорость TUN: ↑ " + controller.tunnelCounters.uploadRate
-                    + " Б/с · ↓ " + controller.tunnelCounters.downloadRate + " Б/с" : ""
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-            }
+            contentItem: ColumnLayout {
+            spacing: 10
             TabBar {
                 id: tabs
                 Layout.fillWidth: true
                 TabButton { text: "Профили" }
                 TabButton { text: "Импорт" }
                 TabButton { text: "Подписки" }
-                TabButton { text: "Диагностика" }
+                TabButton { text: "Настройки" }
                 TabButton { text: "Аналитика" }
             }
             Label {
@@ -359,7 +430,7 @@ ApplicationWindow {
                     contentWidth: availableWidth
                     ColumnLayout {
                     width: parent.width
-                    Label { text: "Выбор и проверка ядра · Linux x86_64"; font.bold: true }
+                    Label { text: "Подключение"; font.bold: true }
                     ComboBox {
                         model: ["sing-box", "xray"]
                         currentIndex: controller.selectedCore === "xray" ? 1 : 0
@@ -461,8 +532,8 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Label {
-                        text: "Всего через TUN · ↑ " + controller.analyticsSummary.upload
-                            + " Б · ↓ " + controller.analyticsSummary.download + " Б"
+                        text: "Всего через TUN · ↑ " + window.formatBytes(controller.analyticsSummary.upload)
+                            + "  ·  ↓ " + window.formatBytes(controller.analyticsSummary.download)
                         font.bold: true
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
@@ -519,7 +590,8 @@ ApplicationWindow {
                             text: analyticsView.currentIndex === 0
                                 ? modelData.at + " · " + modelData.label + " · " + modelData.core
                                     + " · " + (modelData.kind === "traffic"
-                                        ? "↑ " + modelData.upload + " Б / ↓ " + modelData.download + " Б"
+                                        ? "↑ " + window.formatBytes(modelData.upload)
+                                            + " / ↓ " + window.formatBytes(modelData.download)
                                         : modelData.kind === "tcp-probe"
                                             ? (modelData.latency === "-1" ? "TCP-проба: нет ответа"
                                                 : "TCP-проба: " + modelData.latency + " мс")
@@ -530,8 +602,8 @@ ApplicationWindow {
                                                 "recovery-required": "Требуется восстановление",
                                                 "counter-reset": "Сброс счётчика"
                                             })[modelData.kind] || "Событие")
-                                : modelData.label + " · ↑ " + modelData.upload + " Б · ↓ "
-                                    + modelData.download + " Б"
+                                : modelData.label + " · ↑ " + window.formatBytes(modelData.upload)
+                                    + " · ↓ " + window.formatBytes(modelData.download)
                             contentItem: Label {
                                 text: item.text
                                 textFormat: Text.PlainText
@@ -543,6 +615,7 @@ ApplicationWindow {
                     Label { text: "Нет сохранённых данных."; visible: analyticsList.count === 0 }
                 }
             }
+        }
         }
     }
 }

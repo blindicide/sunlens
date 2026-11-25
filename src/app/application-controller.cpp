@@ -77,6 +77,7 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
 QVariantList ApplicationController::servers() const { return servers_; }
 QVariantList ApplicationController::subscriptions() const { return subscriptions_; }
 QString ApplicationController::selectedId() const { return selectedId_; }
+QString ApplicationController::selectedLabel() const { return selectedLabel_; }
 QString ApplicationController::message() const { return message_; }
 bool ApplicationController::busy() const { return manager_.busy(); }
 bool ApplicationController::coreBusy() const { return coreBusy_; }
@@ -116,10 +117,14 @@ void ApplicationController::reload() {
     servers_.clear();
     subscriptions_.clear();
     selectedId_ = repository_.preference(QStringLiteral("selected-server"));
+    selectedLabel_.clear();
     bool selectedExists = false;
     for (const auto& server : repository_.servers()) {
         const auto& node = server.node;
-        selectedExists |= server.id == selectedId_;
+        if (server.id == selectedId_) {
+            selectedExists = true;
+            selectedLabel_ = node.label;
+        }
         servers_.append(QVariantMap{{"id", server.id},
                                     {"subscriptionId", server.subscriptionId},
                                     {"label", node.label},

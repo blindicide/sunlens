@@ -17,6 +17,7 @@ class ApplicationController : public QObject {
     Q_PROPERTY(QVariantList servers READ servers NOTIFY profilesChanged)
     Q_PROPERTY(QVariantList subscriptions READ subscriptions NOTIFY profilesChanged)
     Q_PROPERTY(QString selectedId READ selectedId NOTIFY profilesChanged)
+    Q_PROPERTY(QString selectedLabel READ selectedLabel NOTIFY profilesChanged)
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(bool coreBusy READ coreBusy NOTIFY coreInfoChanged)
@@ -43,6 +44,7 @@ class ApplicationController : public QObject {
     [[nodiscard]] QVariantList servers() const;
     [[nodiscard]] QVariantList subscriptions() const;
     [[nodiscard]] QString selectedId() const;
+    [[nodiscard]] QString selectedLabel() const;
     [[nodiscard]] QString message() const;
     [[nodiscard]] bool busy() const;
     [[nodiscard]] bool coreBusy() const;
@@ -104,6 +106,7 @@ class ApplicationController : public QObject {
     QVariantList servers_;
     QVariantList subscriptions_;
     QString selectedId_;
+    QString selectedLabel_;
     QString message_;
     std::shared_ptr<const ICoreAdapter> adapter_;
     QFutureWatcher<ValidationResult> validation_;
