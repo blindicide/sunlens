@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=SUNLENS
-Comment=Управление VPN-профилями и подписками
+Comment=Подключение к VPN и управление подписками
 Exec=sunlens
+TryExec=sunlens
 Icon=sunlens
 Terminal=false
 Categories=Network;Qt;

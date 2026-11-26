@@ -46,6 +46,8 @@
 - [ ] DEB, RPM и NSIS EXE: установка/GUI/удаление на чистых ОС.
 - [x] Локальный CPack DEB с нативными Qt-зависимостями и проверяемым payload.
 - [x] Установка, offscreen запуск, helper IPC и purge DEB в чистой Ubuntu 24.04.5.
+- [ ] Удалённый прогон сборки и проверки DEB/RPM в GitHub Actions.
+- [ ] Установка, offscreen запуск, helper IPC и удаление RPM в чистой Fedora 44.
 - [ ] Установленный VPN-сеанс и удаление после аварии на Debian/Ubuntu baseline.
 - [ ] Полная живая матрица TUN (2 ОС × 2 ядра), внешняя проверка утечек.
 - [ ] Проверенные логи, hashes, metadata, точный tag/version, changelog.

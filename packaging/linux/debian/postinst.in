@@ -3,6 +3,15 @@ set -eu
 
 case "${1:-}" in
     configure|abort-upgrade|abort-remove|abort-deconfigure)
+        for directory in "@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens" \
+                         "@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/cores"; do
+            if [ -L "$directory" ] || [ ! -d "$directory" ] ||
+                [ "$(stat -c '%u:%g' -- "$directory")" != 0:0 ]; then
+                echo "Небезопасный каталог SUNLENS: $directory" >&2
+                exit 1
+            fi
+            chmod 0755 -- "$directory"
+        done
         if command -v deb-systemd-helper >/dev/null 2>&1; then
             deb-systemd-helper enable sunlens-recover.service >/dev/null
         fi

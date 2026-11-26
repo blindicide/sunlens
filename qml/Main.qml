@@ -12,6 +12,7 @@ ApplicationWindow {
     title: "SUNLENS " + appVersion + " · 5КР001-1"
     color: palette.window
     property bool allowExit: false
+    readonly property bool useDnsHttps: controller.selectedCore !== "xray" && dnsHttps.checked
     readonly property bool darkTheme: palette.window.hslLightness < 0.5
     readonly property color panelBorder: Qt.alpha(palette.windowText, 0.14)
     readonly property bool needsAttention: controller.tunnelState === "error"
@@ -49,6 +50,10 @@ ApplicationWindow {
         function onQuitReady() {
             window.allowExit = true
             window.close()
+        }
+        function onSubscriptionImported() {
+            if (tabs.currentIndex === 2)
+                tabs.currentIndex = 0
         }
     }
     Dialog {
@@ -193,7 +198,8 @@ ApplicationWindow {
                                 controller.stopTunnel()
                             else
                                 controller.startTunnel(routing.currentIndex, lan.checked, ipv6.checked,
-                                    dnsAddress.text, dnsPort.value, dnsHttps.checked, dnsName.text)
+                                    dnsAddress.text, dnsPort.value, window.useDnsHttps,
+                                    window.useDnsHttps ? dnsName.text : "")
                         }
                         Layout.minimumWidth: 150
                         Layout.preferredHeight: 42
@@ -254,6 +260,7 @@ ApplicationWindow {
             }
             Label {
                 text: controller.message
+                textFormat: Text.PlainText
                 visible: text.length > 0
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
@@ -265,8 +272,15 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 ColumnLayout {
                     Label {
-                        text: "Профили не добавлены. Откройте «Импорт»."
+                        text: "Добавьте ссылку подписки или отдельный сервер."
                         visible: controller.servers.length === 0
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        visible: controller.servers.length === 0
+                        Button { text: "Добавить подписку"; onClicked: tabs.currentIndex = 2 }
+                        Button { text: "Импортировать профиль"; onClicked: tabs.currentIndex = 1 }
                     }
                     ListView {
                         id: serverList
@@ -326,8 +340,10 @@ ApplicationWindow {
                         Button {
                             text: "Импортировать"
                             onClicked: {
-                                if (controller.importText(importInput.text))
+                                if (controller.importText(importInput.text)) {
                                     importInput.clear()
+                                    tabs.currentIndex = 0
+                                }
                             }
                         }
                         Label { text: "Или настройте TCP-узел вручную"; font.bold: true }
@@ -384,8 +400,10 @@ ApplicationWindow {
                                 const cipher = method.visible ? method.currentText : ""
                                 if (controller.addManual(protocol.currentText, serverHost.text,
                                         serverPort.value, credential.text, cipher, tls.checked,
-                                        tls.checked ? sni.text : ""))
+                                        tls.checked ? sni.text : "")) {
                                     credential.clear()
+                                    tabs.currentIndex = 0
+                                }
                             }
                         }
                     }
@@ -408,7 +426,7 @@ ApplicationWindow {
                     RowLayout {
                         Button {
                             text: "Загрузить"
-                            enabled: !controller.busy
+                            enabled: !controller.busy && subscriptionUrl.text.trim().length > 0
                             onClicked: {
                                 controller.fetchSubscription(subscriptionUrl.text, subscriptionName.text)
                                 subscriptionUrl.clear()
@@ -458,11 +476,18 @@ ApplicationWindow {
                         enabled: !controller.tunnelActive && !controller.coreBusy && !controller.profileCheckBusy
                         Accessible.name: "Ядро TUN"
                     }
+                    Label {
+                        visible: controller.usesInstalledCore
+                        text: "Используется установленное ядро из пакета SUNLENS."
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
                     TextField {
                         id: coreExecutable
+                        visible: !controller.usesInstalledCore
                         Layout.fillWidth: true
                         text: controller.corePath
-                        placeholderText: "Абсолютный путь к закреплённому ядру"
+                        placeholderText: "Путь к ядру (только проверка конфигурации)"
                         Accessible.name: placeholderText
                     }
                     ComboBox {
@@ -490,15 +515,14 @@ ApplicationWindow {
                         CheckBox {
                             id: dnsHttps
                             text: "DNS over HTTPS"
-                            checked: controller.selectedCore !== "xray"
-                            enabled: controller.selectedCore !== "xray"
-                            onCheckedChanged: dnsPort.value = checked ? 443 : 53
+                            checked: true
+                            visible: controller.selectedCore !== "xray"
                         }
                         SpinBox {
                             id: dnsPort
                             from: 1
                             to: 65535
-                            value: 443
+                            value: window.useDnsHttps ? 443 : 53
                             editable: true
                             Accessible.name: "Порт DNS"
                         }
@@ -506,7 +530,7 @@ ApplicationWindow {
                     TextField {
                         id: dnsName
                         text: "cloudflare-dns.com"
-                        visible: dnsHttps.checked
+                        visible: window.useDnsHttps
                         enabled: !controller.tunnelActive
                         placeholderText: "Имя TLS-сертификата DNS"
                         Accessible.name: placeholderText
@@ -521,10 +545,13 @@ ApplicationWindow {
                     }
                     Button {
                         text: controller.coreBusy ? "Проверка…" : "Проверить конфигурацию"
-                        enabled: !controller.coreBusy && !controller.profileCheckBusy
+                        enabled: !controller.coreBusy && !controller.profileCheckBusy && !controller.tunnelActive
                             && controller.selectedId.length > 0
+                            && (controller.usesInstalledCore || coreExecutable.text.trim().length > 0)
                         onClicked: controller.validateSelectedCore(coreExecutable.text,
-                            routing.currentIndex === 1, lan.checked, ipv6.checked)
+                            routing.currentIndex === 1, lan.checked, ipv6.checked,
+                            dnsAddress.text, dnsPort.value, window.useDnsHttps,
+                            window.useDnsHttps ? dnsName.text : "")
                     }
                     Label {
                         text: controller.coreStatus

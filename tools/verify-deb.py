@@ -38,15 +38,24 @@ def verify_deb(package, root):
         "usr/share/polkit-1/actions/org.sunlens.tunnel.policy",
         "usr/lib/systemd/system/sunlens-recover.service",
     }
+    files = executable_paths.keys() | data_paths
+    directories = {str(parent) for path in files
+                   for parent in pathlib.PurePosixPath(path).parents if str(parent) != "."}
     seen = set()
     with subprocess.Popen(["dpkg-deb", "--fsys-tarfile", str(package)], stdout=subprocess.PIPE) as p:
         with tarfile.open(mode="r|", fileobj=p.stdout) as archive:
             for member in archive:
-                name = member.name.removeprefix("./")
-                if not (name in executable_paths or name in data_paths):
+                name = member.name.removeprefix("./").rstrip("/")
+                if name not in files and name not in directories:
                     continue
-                if (name in seen or not member.isfile() or member.uid != 0 or member.gid != 0
-                        or member.mode & 0o7022 or member.size == 0):
+                if name in seen or member.uid != 0 or member.gid != 0:
+                    raise SystemExit(f"Неверный владелец или повторяющийся путь: {name}")
+                seen.add(name)
+                if name in directories:
+                    if not member.isdir() or member.mode != 0o755:
+                        raise SystemExit(f"Небезопасные права каталога: {name} ({member.mode:o})")
+                    continue
+                if not member.isfile() or member.mode & 0o7022 or member.size == 0:
                     raise SystemExit(f"Неверный файл или права: {name}")
                 if name in executable_paths:
                     if not member.mode & 0o100:
@@ -57,11 +66,10 @@ def verify_deb(package, root):
                         raise SystemExit(f"SHA-256 не совпадает: {name}")
                     if not expected and handle.read(4) != b"\x7fELF":
                         raise SystemExit(f"Не ELF: {name}")
-                seen.add(name)
         p.stdout.read()
         if p.wait():
             raise SystemExit("Ошибка чтения payload DEB.")
-    missing = (executable_paths.keys() | data_paths) - seen
+    missing = (files | directories) - seen
     if missing:
         raise SystemExit(f"Не хватает файлов: {', '.join(sorted(missing))}")
     with package.open("rb") as handle:

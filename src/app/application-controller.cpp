@@ -78,6 +78,7 @@ ApplicationController::ApplicationController(ProfileRepository& repository,
     connect(&manager_, &SubscriptionManager::completed, this, [this] {
         setMessage(QStringLiteral("Подписка обновлена. Сеть не изменена."));
         reload();
+        emit subscriptionImported();
     });
     reload();
     lastHistoryPrune_ = QDateTime::currentMSecsSinceEpoch();
@@ -100,7 +101,11 @@ QString ApplicationController::installedCorePath() const {
 #endif
     return {};
 }
-QString ApplicationController::corePath() const { return corePath_; }
+QString ApplicationController::corePath() const {
+    const auto installed = installedCorePath();
+    return installed.isEmpty() ? corePath_ : installed;
+}
+bool ApplicationController::usesInstalledCore() const { return !installedCorePath().isEmpty(); }
 QString ApplicationController::coreStatus() const { return coreStatus_; }
 QString ApplicationController::selectedCore() const { return selectedCore_; }
 void ApplicationController::setSelectedCore(const QString& core) {
@@ -156,7 +161,12 @@ void ApplicationController::reload() {
     }
     if (!selectedExists) {
         selectedId_.clear();
-        repository_.setPreference(QStringLiteral("selected-server"), QStringLiteral(""));
+        if (!tunnelActive() && !servers_.isEmpty()) {
+            const auto first = servers_.constFirst().toMap();
+            selectedId_ = first.value("id").toString();
+            selectedLabel_ = first.value("label").toString();
+        }
+        repository_.setPreference(QStringLiteral("selected-server"), selectedId_);
     }
     for (const auto& entry : repository_.subscriptions()) {
         subscriptions_.append(QVariantMap{{"id", entry.id},
@@ -256,7 +266,9 @@ void ApplicationController::renameServer(const QString& id, const QString& label
 }
 
 void ApplicationController::validateSelectedCore(const QString& executable, bool direct,
-                                                 bool bypassLan, bool ipv6) {
+                                                 bool bypassLan, bool ipv6,
+                                                 const QString& dnsAddress, int dnsPort,
+                                                 bool dnsHttps, const QString& dnsTlsName) {
     if (profileCheckBusy_) {
         setMessage(QStringLiteral("Дождитесь окончания проверки профиля."));
         return;
@@ -279,19 +291,22 @@ void ApplicationController::validateSelectedCore(const QString& executable, bool
         options.routing = direct ? RoutingMode::Direct : RoutingMode::Proxy;
         options.bypassLan = bypassLan;
         options.ipv6 = ipv6;
+        options.dns = {dnsAddress.trimmed(), dnsPort, dnsHttps, dnsTlsName.trimmed()};
+        options.tunnel.autoRedirect = false;
         std::shared_ptr<const ICoreAdapter> adapter = adapter_;
-        if (selectedCore_ == "xray") {
+        if (selectedCore_ == "xray")
             adapter = std::make_shared<XrayAdapter>();
-            options.dns = {QStringLiteral("1.1.1.1"), 53, false, {}};
-        }
         const auto config = adapter->configuration(*selected, options);
-        corePath_ = executable.trimmed();
-        repository_.setPreference(selectedCore_ + QStringLiteral("-path"), corePath_);
+        auto path = installedCorePath();
+        if (path.isEmpty()) {
+            path = executable.trimmed();
+            repository_.setPreference(selectedCore_ + QStringLiteral("-path"), path);
+            corePath_ = path;
+        }
         coreBusy_ = true;
         coreStatus_ =
             QStringLiteral("Проверка SHA-256, версии и конфигурации. Сеть не изменяется.");
         emit coreInfoChanged();
-        const auto path = corePath_;
         validation_.setFuture(QtConcurrent::run([adapter, path, config] {
             try {
                 return adapter->validate(path, config);

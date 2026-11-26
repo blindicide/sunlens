@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# При upgrade RPM вызывает старый %preun после установки новой версии.
+# Для удаления блокируем новые подключения до удаления файлов.
+if [ "${1:-0}" = 0 ]; then
+    "@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/sunlens-tunnel-helper" --prepare-uninstall
+    systemctl disable sunlens-recover.service >/dev/null 2>&1
+fi

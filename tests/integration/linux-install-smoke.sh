@@ -7,13 +7,33 @@ if [ "${SUNLENS_DISPOSABLE_VM:-}" != 1 ] || [ "$(id -u)" = 0 ] ||
     exit 1
 fi
 if [ "$#" != 1 ]; then
-    echo 'Укажите абсолютный путь к DEB.' >&2
+    echo 'Укажите абсолютный путь к DEB или RPM.' >&2
     exit 1
 fi
-case "$1" in /*.deb) package=$1 ;; *) exit 1 ;; esac
+case "$1" in /*.deb|/*.rpm) package=$1 ;; *) exit 1 ;; esac
 . /etc/os-release
-[ "$ID" = ubuntu ] && [ "$VERSION_ID" = 24.04 ]
-if dpkg-query -W -f='${Status}' sunlens 2>/dev/null | grep -q 'install ok installed'; then
+case "$ID:$VERSION_ID:$package" in
+    ubuntu:24.04:*.deb)
+        type=DEB
+        version=$(dpkg-deb -f "$package" Version)
+        expected_name="sunlens-$version-linux-amd64.deb"
+        installed() { dpkg-query -W -f='${Status}' sunlens 2>/dev/null | grep -q 'install ok installed'; }
+        metadata() { dpkg-query -W -f='${Version}' sunlens; }
+        install_package() { sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y install "$package"; }
+        remove_package() { sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y purge sunlens; }
+        ;;
+    fedora:44:*.rpm)
+        type=RPM
+        version=$(rpm -qp --queryformat '%{VERSION}' "$package")
+        expected_name="sunlens-$version-linux-x86_64.rpm"
+        installed() { rpm -q sunlens >/dev/null 2>&1; }
+        metadata() { rpm -q --queryformat '%{VERSION}' sunlens; }
+        install_package() { sudo -n dnf -y install "$package"; }
+        remove_package() { sudo -n dnf -y remove --no-autoremove sunlens; }
+        ;;
+    *) echo 'Используйте Ubuntu 24.04/DEB или Fedora 44/RPM.' >&2; exit 1 ;;
+esac
+if installed; then
     echo 'Пакет уже установлен; нужна чистая VM.' >&2
     exit 1
 fi
@@ -22,8 +42,7 @@ if command -v qmake6 >/dev/null || command -v cmake >/dev/null || command -v go 
     exit 1
 fi
 
-version=$(dpkg-deb -f "$package" Version)
-test "$(basename "$package")" = "sunlens-$version-linux-amd64.deb"
+test "$(basename "$package")" = "$expected_name"
 workspace=$(mktemp -d)
 trap 'rm -f "$workspace"/before "$workspace"/after "$workspace"/data/sentinel; rmdir "$workspace"/data "$workspace" 2>/dev/null || true' EXIT
 export XDG_DATA_HOME="$workspace/data"
@@ -44,12 +63,11 @@ for family in ("-4", "-6"):
 PY
 }
 
-sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y install "$package"
-dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' sunlens
-test "$(dpkg-query -W -f='${Version}' sunlens)" = "$version"
-test "$(dpkg-query -W -f='${Status}' sunlens)" = 'install ok installed'
+install_package
+installed
+test "$(metadata)" = "$version"
 test "$(QT_QPA_PLATFORM=offscreen sunlens --version)" = "SUNLENS $version"
-QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FATAL_WARNINGS=1 sunlens --smoke-test
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FATAL_WARNINGS=1 sunlens --smoke-test-installed
 helper=/usr/libexec/sunlens/sunlens-tunnel-helper
 test "$("$helper" --version)" = "SUNLENS $version"
 if "$helper" --recover; then
@@ -97,7 +115,11 @@ for core, entry in manifest["cores"].items():
     print(core, entry["version"], digest)
 PY
 snapshot >"$workspace/before"
-sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y purge sunlens
+remove_package
+if installed; then
+    echo 'Запись пакета осталась после удаления.' >&2
+    exit 1
+fi
 snapshot >"$workspace/after"
 diff -u "$workspace/before" "$workspace/after"
 test ! -e /usr/bin/sunlens
@@ -107,4 +129,4 @@ test ! -e /usr/share/polkit-1/actions/org.sunlens.tunnel.policy
 test ! -e /var/lib/sunlens/recovery.json
 test ! -e /run/sunlens/uninstalling
 test "$(cat "$XDG_DATA_HOME/sentinel")" = sunlens-local-fixture
-printf '%s\n' 'DEB: зависимости, запуск GUI и удаление проверены; полная TUN-матрица не проверялась.'
+printf '%s\n' "$type: зависимости, запуск GUI и удаление проверены; полная TUN-матрица не проверялась."

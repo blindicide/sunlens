@@ -39,7 +39,8 @@ GUI использует `pkexec --disable-internal-agent` и дожидаетс
 - Проверка root ownership путей, SHA-256 и версии ядра.
 - Root-only 0600-конфигурация в `/run/sunlens/<UUID>/config.json`.
 - Автоматическая маршрутизация без глобальных nftables-объектов в первом slice.
-- Native DNS допускается только с активным systemd-resolved и его resolv.conf.
+- Native DNS требует активного systemd-resolved и `/etc/resolv.conf`, ссылающегося
+  на `/run/systemd/resolve/stub-resolv.conf`, а не на файл с адресами uplink DNS.
 - «ready» означает наличие TUN/политик/DNS, **не** успешную авторизацию на сервере.
 - EOF от GUI, неожиданное завершение ядра, timeout и ошибка подготовки запускают откат.
 - `PR_SET_PDEATHSIG` завершает ядро при гибели помощника; следующий запуск
@@ -53,7 +54,12 @@ GUI использует `pkexec --disable-internal-agent` и дожидаетс
 известный config-файл. Исходные маршруты не перезаписываются целиком поверх
 изменений NetworkManager. Выделенный диапазон priorities нельзя параллельно
 использовать другим root-инструментом: upstream sing-box очищает свой диапазон
-при остановке. Поддержка конфликтов с другими VPN требует отдельной проверки.
+при остановке. Два предшествующих приоритета выделены для его помеченных
+исходящих сокетов: сначала `main`, затем `unreachable` во избежание петли.
+Маршруты TUN используют более специфичные префиксы, чем маршрут по умолчанию:
+это не даёт локальным маршрутам из `main` обходить настройку LAN. При запрете
+IPv6 LAN bypass не распространяется на IPv6. Поддержка конфликтов с другими VPN
+требует отдельной проверки.
 
 ## Реальные проверки
 
@@ -70,6 +76,9 @@ ctest --preset dev --output-on-failure
 проверяется, что network namespace принадлежит этому user namespace.
 Проверены TCP/UDP × IPv4/IPv6, явный DNS, блокирование IPv6, неверный UUID без
 direct fallback, повторные connect/disconnect, SIGKILL ядра и SIGKILL driver.
+Источник TCP на fixture-сервере различает direct и proxy для LAN, включая
+точное доменное правило, правило IP/CIDR и маршрут Direct. Отдельная ULA-цель
+проверяет, что запрет IPv6 распространяется и на локальную сеть.
 Проверены исходные routes/rules, сохранение постороннего маршрута/правила,
 удаление временных секретов и внешняя packet capture на veth.
 Системная сеть хоста при этом не меняется.
@@ -77,9 +86,16 @@ direct fallback, повторные connect/disconnect, SIGKILL ядра и SIGK
 Evidence: `build/dev/evidence/linux-tun/{result,before,during,after}.json`
 и `leaks.pcap`. Эти файлы генерируются тестом, не являются поставляемыми данными.
 
-**Не проверены:** установленный polkit/pkexec flow, takeover DNS системного
-resolver, реальный sleep/wake, смена физического интерфейса, reboot/uninstall
-в чистой VM, другие live-протоколы и Windows. Это не полная матрица v1.0.0.
+На GitHub-hosted Ubuntu runner добавлен сценарий DEB после сборки. Он запускает
+установленного root-помощника в отдельном network/mount namespace, с отдельными
+D-Bus и systemd-resolved, проверяет DNS через `resolvectl`, UDP stub и NSS,
+а также отказ `--prepare-uninstall` при активном TUN и очистку после аварии.
+Тест без desktop agent ожидает отказ pkexec и не заменяет проверку успешной
+интерактивной авторизации. Удалённый прогон ещё не подтверждён.
+
+**Не проверены:** положительный polkit/pkexec flow, системный DNS установленного
+пакета, реальный sleep/wake, смена интерфейса, reboot/uninstall после аварии в
+чистой VM, другие live-протоколы и Windows. Это не полная матрица v1.0.0.
 Обычный validation-only temporary directory при SIGKILL требует отдельной
 очистки; runtime-конфигурация туннеля уже учитывается в журнале.
 

@@ -14,6 +14,11 @@ if(UNIX AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Каталог установки" FORCE)
 endif()
 include(GNUInstallDirs)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Права пакета не должны зависеть от umask пользователя сборки.
+    set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network Sql Concurrent)
 qt_standard_project_setup()
@@ -97,9 +102,15 @@ install(FILES VERSION LICENSE third_party/NOTICE.md
     DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
 install(FILES dependencies.json DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
 
-option(SUNLENS_PACKAGE_DEB "Разрешить сборку локального DEB для Ubuntu 24.04" OFF)
+option(SUNLENS_PACKAGE_DEB "Собрать DEB для Ubuntu 24.04" OFF)
+option(SUNLENS_PACKAGE_RPM "Собрать RPM для Fedora 44" OFF)
+if(SUNLENS_PACKAGE_DEB AND SUNLENS_PACKAGE_RPM)
+    message(FATAL_ERROR "Используйте отдельную сборку для каждого baseline пакетов")
+endif()
 if(SUNLENS_PACKAGE_DEB)
     include(cmake/debian-package.cmake)
+elseif(SUNLENS_PACKAGE_RPM)
+    include(cmake/fedora-package.cmake)
 endif()
 
 if(BUILD_TESTING)

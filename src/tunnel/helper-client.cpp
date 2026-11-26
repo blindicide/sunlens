@@ -117,6 +117,12 @@ void HelperClient::start(const TunnelRequest& request) {
     }
     try {
         pending_ = TunnelRequest::fromJson(request.toJson());
+#ifdef Q_OS_LINUX
+        const auto& executable = pending_->core == "xray" ? InstalledXray : InstalledSingBox;
+        if (!LinuxTunnelPlatform::trustedPath(executable, true))
+            throw Error(QStringLiteral("Нет установленного ядра %1. Переустановите пакет SUNLENS.")
+                            .arg(pending_->core));
+#endif
         const auto bytes =
             QJsonDocument(
                 QJsonObject{{"schema", 1}, {"operation", "start"}, {"request", pending_->toJson()}})

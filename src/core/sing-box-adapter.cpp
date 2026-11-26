@@ -99,11 +99,25 @@ QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions&
                     {"iproute2_rule_index", parameters.rulePriority},
                     {"strict_route", true},
                     {"dns_mode", parameters.nativeDns ? "hijack" : "disabled"}};
-    if (options.bypassLan)
-        tun.insert("route_exclude_address",
-                   QJsonArray{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
-                              "fc00::/7", "fe80::/10"});
+    if (options.bypassLan) {
+        QJsonArray excluded{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"};
+        if (options.ipv6) {
+            excluded.append("fc00::/7");
+            excluded.append("fe80::/10");
+        }
+        tun.insert("route_exclude_address", excluded);
+    }
     const bool direct = options.routing == RoutingMode::Direct;
+    QJsonObject route{{"auto_detect_interface", true},
+                      {"default_domain_resolver", "bootstrap"},
+                      {"final", direct ? "direct" : "proxy"},
+                      {"rules", rules}};
+    if (!parameters.autoRedirect) {
+        // Маршруты /1 выбираются до lookup main с suppress_prefixlength 0.
+        // Исходящие сокеты ядра используют отдельное правило по метке.
+        tun.insert("route_address", QJsonArray{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"});
+        route.insert("default_mark", parameters.routeTable);
+    }
     QJsonObject remote{{"tag", "remote"},
                        {"type", options.dns.https ? "https" : "udp"},
                        {"server", options.dns.address},
@@ -121,10 +135,7 @@ QJsonDocument SingBoxAdapter::configuration(const Node& node, const CoreOptions&
                     {"inbounds", QJsonArray{tun}},
                     {"outbounds", QJsonArray{outbound(node),
                                              QJsonObject{{"type", "direct"}, {"tag", "direct"}}}},
-                    {"route", QJsonObject{{"auto_detect_interface", true},
-                                          {"default_domain_resolver", "bootstrap"},
-                                          {"final", direct ? "direct" : "proxy"},
-                                          {"rules", rules}}}});
+                    {"route", route}});
 }
 
 QJsonDocument SingBoxAdapter::profileCheckConfig(const Node& node, quint16 port,

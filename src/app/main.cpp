@@ -25,12 +25,15 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setApplicationName(QStringLiteral("SUNLENS"));
     QCoreApplication::setOrganizationName(QStringLiteral("SUNLENS"));
     QCoreApplication::setApplicationVersion(sunlens::Version);
+    QGuiApplication::setDesktopFileName(QStringLiteral("sunlens"));
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("5КР001-1 — настольный VPN-клиент"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({QStringLiteral("smoke-test"),
                       QStringLiteral("Проверить загрузку интерфейса без изменения сети.")});
+    parser.addOption({QStringLiteral("smoke-test-installed"),
+                      QStringLiteral("Проверить интерфейс и установленные компоненты VPN.")});
     parser.process(app);
 #ifdef Q_OS_UNIX
     if (geteuid() == 0) {
@@ -40,17 +43,27 @@ int main(int argc, char* argv[]) {
 #endif
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
     try {
+        const bool installedSmoke = parser.isSet(QStringLiteral("smoke-test-installed"));
+        const bool smoke = installedSmoke || parser.isSet(QStringLiteral("smoke-test"));
         QTemporaryDir temporary;
         const auto directory =
-            parser.isSet(QStringLiteral("smoke-test"))
-                ? temporary.path()
-                : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+            smoke ? temporary.path()
+                  : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
         if (directory.isEmpty() || QFileInfo(directory).isSymLink() || !QDir().mkpath(directory) ||
             !QFile::setPermissions(directory, QFileDevice::ReadOwner | QFileDevice::WriteOwner |
                                                   QFileDevice::ExeOwner))
             throw sunlens::Error(QStringLiteral("Не удалось создать закрытый каталог данных."));
         sunlens::ProfileRepository repository(directory + QStringLiteral("/profiles.sqlite"));
         sunlens::ApplicationController controller(repository);
+        if (installedSmoke) {
+            if (!controller.tunnelAvailable() || !controller.usesInstalledCore())
+                throw sunlens::Error(
+                    QStringLiteral("Установленный помощник или ядро sing-box недоступны."));
+            controller.setSelectedCore(QStringLiteral("xray"));
+            if (!controller.usesInstalledCore())
+                throw sunlens::Error(QStringLiteral("Установленное ядро Xray недоступно."));
+            controller.setSelectedCore(QStringLiteral("sing-box"));
+        }
         bool qmlWarnings = false;
         QQmlApplicationEngine engine;
         QObject::connect(&engine, &QQmlEngine::warnings, &app,
@@ -62,7 +75,7 @@ int main(int argc, char* argv[]) {
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Sunlens/qml/Main.qml")));
         if (engine.rootObjects().isEmpty())
             return 1;
-        if (parser.isSet(QStringLiteral("smoke-test")))
+        if (smoke)
             QTimer::singleShot(250, &app, [&app, &qmlWarnings] { app.exit(qmlWarnings ? 1 : 0); });
         return app.exec();
     } catch (const sunlens::Error& error) {

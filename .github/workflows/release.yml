@@ -1,4 +1,4 @@
-name: Release gates
+name: Подготовка выпуска
 on:
   push:
     tags: ['v*']
@@ -7,15 +7,62 @@ permissions:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Validate tag before any release action
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Проверка соответствия тега и VERSION
+        id: version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
-          import os, re
+          import os, pathlib, re
           tag = os.environ["RELEASE_TAG"]
-          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?", tag):
-              raise SystemExit("Invalid SemVer tag")
-          raise SystemExit("Release blocked: license, installers and live TUN matrix are unverified. See docs/releasing.md.")
+          version = pathlib.Path("VERSION").read_text(encoding="utf-8").strip()
+          if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version) or tag != f"v{version}":
+              raise SystemExit("Тег должен точно соответствовать VERSION в проверяемом коммите.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"version={version}", file=output)
           PY
+      - name: Блокировка неподтверждённого выпуска
+        run: |
+          echo 'Выпуск запрещён: лицензия, установщики и живая матрица TUN ещё не подтверждены. См. docs/releasing.md.' >&2
+          exit 1
+
+  linux-packages:
+    needs: preflight
+    uses: ./.github/workflows/linux-packages.yml
+    with:
+      release-candidate: true
+
+  draft:
+    needs: [preflight, linux-packages]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: sunlens-linux-*
+          merge-multiple: true
+          path: packages
+      - name: Добавление DEB и RPM в черновик GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        working-directory: packages
+        run: |
+          set -eu
+          deb="sunlens-$VERSION-linux-amd64.deb"
+          rpm="sunlens-$VERSION-linux-x86_64.rpm"
+          test -s "$deb"
+          test -s "$rpm"
+          sha256sum "$deb" "$rpm" > SHA256SUMS
+          gh release create "$RELEASE_TAG" "$deb" "$rpm" SHA256SUMS \
+            --draft --verify-tag --generate-notes --title "SUNLENS $VERSION"

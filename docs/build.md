@@ -25,34 +25,61 @@ Windows: MSVC 2022 x64, Ninja и Qt MSVC x64; запускайте те же CMa
 Headless Linux: `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`.
 `--smoke-test` не изменяет сеть и не открывает реальный туннель.
 
-## Локальный пакет DEB
+## Пакеты Linux в GitHub Actions
 
-Только Ubuntu 24.04 x86_64 с нативной Qt 6.4.x и системным Python ≥3.11.
-CPack не подменяет системный Qt: необходимые QML modules, SQL driver,
-QPA и SVG плагины установит apt как зависимости. Пакет включает проверенные
-копии обоих ядер для **локальных проверок**, не для скачивания пользователями.
+Задание `linux-packages` строит DEB на GitHub runner Ubuntu 24.04 x86_64,
+а RPM — в контейнере Fedora 44 x86_64 на отдельном runner. Оба задания
+используют системный Qt, CPack и закреплённые ядра. `tools/build-linux-package.sh`
+проверяет содержимое пакета перед передачей в workflow. Обычный CI выводит
+проверки и SHA-256 в журнал, но не выгружает бинарники до допуска к выпуску.
+На рабочей машине не нужны образы, контейнеры и инструменты сборки пакетов.
+После сборки DEB запускается тест установленного TUN обоих ядер на
+GitHub-hosted runner с изолированной сетью. Это отдельная CI-проверка,
+не установка на чистой системе и не desktop polkit flow.
 
-```sh
-python3 tools/fetch-core.py --destination build/dependencies
-python3 tools/fetch-core.py --core xray --destination build/dependencies
-cmake -S . -B build/deb -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-  -DSUNLENS_PACKAGE_DEB=ON \
-  -DSUNLENS_PACKAGE_SING_BOX="$PWD/build/dependencies/sing-box" \
-  -DSUNLENS_PACKAGE_XRAY="$PWD/build/dependencies/xray"
-cmake --build build/deb --target package
-python3 tools/verify-deb.py "build/deb/sunlens-$(cat VERSION)-linux-amd64.deb"
-```
-
-Полный smoke-test установки выполняется **только** в одноразовой VM от обычного
-пользователя с sudo; запустите `sudo apt-get update`, передайте `.deb` и
-`tests/integration/debian-install-smoke.sh` в гостя и выполните:
+Проверка содержимого не заменяет запуск установщика. Для отдельной проверки
+на удалённом одноразовом госте без SDK/CMake используется сценарий
+`tests/integration/linux-install-smoke.sh`. Сценарий принимает оба формата,
+например на Fedora 44:
 
 ```sh
-SUNLENS_DISPOSABLE_VM=1 sh ./debian-install-smoke.sh "$PWD/sunlens-0.1.0-linux-amd64.deb"
+SUNLENS_DISPOSABLE_VM=1 sh ./linux-install-smoke.sh "$PWD/sunlens-0.1.0-linux-x86_64.rpm"
 ```
 
-Установка добавляет root-owned помощник, policy polkit и включаемый recovery unit.
-Перед удалением/обновлением отключите туннель, чтобы менеджер пакетов не оставил
-сетевые изменения без помощника. `prerm` блокирует удаление при активной
-транзакции или неподтверждённом восстановлении. Пользовательская SQLite не удаляется.
-Этот тест не запускает TUN и не заменяет проверку активного удаления и Windows/RPM.
+Сценарий проверяет установку зависимостей, offscreen запуск, IPC и удаление.
+Он не открывает TUN и не проверяет авторизацию через polkit agent.
+Пользовательские данные не удаляются пакетным менеджером.
+
+### Закрытая проверочная сборка
+
+После согласования закрытого использования бинарников и обязательств
+зависимостей владелец может включить пробные установщики переменной репозитория
+`SUNLENS_PRIVATE_INSTALLERS=enabled`. Используйте закрытый репозиторий только
+с уполномоченными участниками: у пользователей с доступом к Actions будет
+доступ к артефактам. Workflow `linux-preview.yml` запускается вручную уже после
+добавления изменений в основную ветку. Он не создаёт тег или GitHub Release.
+
+```sh
+REPO=OWNER/REPO
+gh variable set SUNLENS_PRIVATE_INSTALLERS --body enabled -R "$REPO"
+gh workflow run linux-preview.yml -R "$REPO"
+gh run list --workflow linux-preview.yml --event workflow_dispatch -R "$REPO"
+```
+
+Подставьте идентификатор нужного прогона:
+
+```sh
+RUN_ID=123456789
+gh run watch "$RUN_ID" --exit-status -R "$REPO"
+gh run download "$RUN_ID" -n sunlens-linux-deb -D sunlens-install -R "$REPO"
+cd sunlens-install
+sha256sum -c sunlens-0.1.0-linux-amd64.deb.sha256
+sudo apt install ./sunlens-0.1.0-linux-amd64.deb
+sunlens
+```
+
+Для Fedora 44 вместо DEB скачайте артефакт `sunlens-linux-rpm`, проверьте
+`sunlens-0.1.0-linux-x86_64.rpm.sha256` и установите RPM командой
+`sudo dnf install ./sunlens-0.1.0-linux-x86_64.rpm`. Оба пакета требуют
+поддерживаемую x86_64 систему, `systemd-resolved` в режиме stub и desktop
+polkit agent для подключения. Обычный GUI запускается от пользователя.

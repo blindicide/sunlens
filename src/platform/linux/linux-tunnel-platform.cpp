@@ -76,6 +76,17 @@ int tableId(const QJsonValue& value) {
     return valid ? result : -1;
 }
 
+bool singBoxEgressSlotsFree(const TunnelLease& lease, const QJsonObject& snapshot) {
+    for (const auto& family : {QStringLiteral("rules4"), QStringLiteral("rules6")}) {
+        for (const auto& value : snapshot[family].toArray()) {
+            const int priority = value.toObject()["priority"].toInt(-1);
+            if (priority == lease.rulePriority - 2 || priority == lease.rulePriority - 1)
+                return false;
+        }
+    }
+    return true;
+}
+
 bool overlaps(const QString& prefix, const QJsonObject& before) {
     const auto candidate = QHostAddress::parseSubnet(prefix);
     for (const auto& family : {QStringLiteral("routes4"), QStringLiteral("routes6")}) {
@@ -218,11 +229,12 @@ QJsonObject LinuxTunnelPlatform::snapshot() {
                        {"addresses", ipJson({"address", "show"})}};
     if (paths_.systemDns) {
         const auto resolved = command(paths_.resolvectl, {"status"});
-        if (!resolved.success || !QFileInfo(QStringLiteral("/etc/resolv.conf"))
-                                      .canonicalFilePath()
-                                      .startsWith(QStringLiteral("/run/systemd/resolve/")))
-            throw Error(QStringLiteral("Для безопасного DNS требуется активный systemd-resolved и "
-                                       "управляемый resolv.conf."));
+        const auto resolvConf = QFileInfo(QStringLiteral("/etc/resolv.conf")).canonicalFilePath();
+        if (!resolved.success ||
+            resolvConf != QStringLiteral("/run/systemd/resolve/stub-resolv.conf"))
+            throw Error(
+                QStringLiteral("Для безопасного DNS нужен systemd-resolved и /etc/resolv.conf, "
+                               "ссылающийся на /run/systemd/resolve/stub-resolv.conf."));
         result.insert("resolved", QString::fromUtf8(resolved.output));
     }
     return result;
@@ -244,8 +256,8 @@ TunnelLease LinuxTunnelPlatform::reserve(const QJsonObject& before) {
         lease.routeTable = 40000 + QRandomGenerator::global()->bounded(20001);
         lease.rulePriority = 12000 + QRandomGenerator::global()->bounded(562) * 32;
         lease.before = before;
-        if (freeReservation(lease, before) && !overlaps(lease.ipv4Prefix, before) &&
-            !overlaps(lease.ipv6Prefix, before))
+        if (freeReservation(lease, before) && singBoxEgressSlotsFree(lease, before) &&
+            !overlaps(lease.ipv4Prefix, before) && !overlaps(lease.ipv6Prefix, before))
             return lease;
     }
     throw Error(QStringLiteral("Нет свободного адресного пространства или диапазона правил TUN."));
@@ -276,8 +288,8 @@ void LinuxTunnelPlatform::launch(const TunnelRequest& request, TunnelLease& leas
     if (!validation.valid)
         throw Error(validation.message);
     const auto current = snapshot();
-    if (!freeReservation(lease, current) || overlaps(lease.ipv4Prefix, current) ||
-        overlaps(lease.ipv6Prefix, current))
+    if (!freeReservation(lease, current) || (!xray && !singBoxEgressSlotsFree(lease, current)) ||
+        overlaps(lease.ipv4Prefix, current) || overlaps(lease.ipv6Prefix, current))
         throw Error(QStringLiteral("Сеть изменилась во время подготовки. Подключитесь повторно."));
     const auto directory = QDir(paths_.runtimeDirectory).filePath(lease.id);
     if (QFileInfo::exists(directory) || QFileInfo(directory).isSymLink() ||
@@ -293,6 +305,15 @@ void LinuxTunnelPlatform::launch(const TunnelRequest& request, TunnelLease& leas
     if (file.write(bytes) != bytes.size() || !file.flush())
         throw Error(QStringLiteral("Не удалось сохранить конфигурацию."));
     file.close();
+    if (!xray) {
+        const auto mark = QString::number(lease.routeTable);
+        for (const auto& family : {QStringLiteral("-4"), QStringLiteral("-6")}) {
+            ipChange({family, "rule", "add", "priority", QString::number(lease.rulePriority - 2),
+                      "fwmark", mark, "lookup", "main"});
+            ipChange({family, "rule", "add", "priority", QString::number(lease.rulePriority - 1),
+                      "fwmark", mark, "unreachable"});
+        }
+    }
     core_.setProgram(executable);
     core_.setArguments({"run", xray ? "-config" : "-c", file.fileName()});
     const auto parentPid = ::getpid();
@@ -446,6 +467,24 @@ void LinuxTunnelPlatform::restore(const TunnelLease& lease) {
         }
         for (const auto& family : {QStringLiteral("-4"), QStringLiteral("-6")}) {
             const auto rules = ipJson({family, "rule", "show"});
+            if (lease.core == "sing-box" && singBoxEgressSlotsFree(lease, lease.before)) {
+                const auto mark = QString::number(lease.routeTable);
+                for (const auto& value : rules) {
+                    const auto rule = value.toObject();
+                    const int priority = rule["priority"].toInt(-1);
+                    const auto ruleMark = rule["fwmark"].toString().toUInt(nullptr, 0);
+                    if (rule.contains("fwmask") ||
+                        ruleMark != static_cast<unsigned>(lease.routeTable))
+                        continue;
+                    if (priority == lease.rulePriority - 2 && rule["table"] == QJsonValue("main"))
+                        ipChange({family, "rule", "delete", "priority", QString::number(priority),
+                                  "fwmark", mark, "lookup", "main"});
+                    if (priority == lease.rulePriority - 1 &&
+                        rule["action"] == QJsonValue("unreachable"))
+                        ipChange({family, "rule", "delete", "priority", QString::number(priority),
+                                  "fwmark", mark, "unreachable"});
+                }
+            }
             for (const auto& value : rules) {
                 const auto rule = value.toObject();
                 const int priority = rule["priority"].toInt(-1);

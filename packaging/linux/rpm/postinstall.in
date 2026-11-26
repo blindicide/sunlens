@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+systemctl enable sunlens-recover.service >/dev/null 2>&1
+"@CMAKE_INSTALL_FULL_LIBEXECDIR@/sunlens/sunlens-tunnel-helper" --finish-install

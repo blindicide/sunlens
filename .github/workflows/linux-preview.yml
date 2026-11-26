@@ -1,0 +1,23 @@
+name: Закрытая сборка установщиков Linux
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  allow-private-preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Проверка разрешения владельца
+        env:
+          PRIVATE_REPOSITORY: ${{ github.event.repository.private }}
+          PRIVATE_INSTALLERS: ${{ vars.SUNLENS_PRIVATE_INSTALLERS }}
+        run: |
+          if [ "$PRIVATE_REPOSITORY" != true ] || [ "$PRIVATE_INSTALLERS" != enabled ]; then
+            echo 'Нужны закрытый репозиторий и явное разрешение SUNLENS_PRIVATE_INSTALLERS=enabled.' >&2
+            exit 1
+          fi
+  linux-packages:
+    needs: allow-private-preview
+    uses: ./.github/workflows/linux-packages.yml
+    with:
+      private-preview: true

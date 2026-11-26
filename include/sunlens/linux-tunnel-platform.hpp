@@ -9,7 +9,7 @@ namespace sunlens {
 struct LinuxTunnelPaths {
     QString core;
     QString runtimeDirectory;
-    QString ip = QStringLiteral("/usr/sbin/ip");
+    QString ip = QStringLiteral("/usr/bin/ip");
     QString resolvectl = QStringLiteral("/usr/bin/resolvectl");
     bool strictOwnership = true;
     bool systemDns = true;

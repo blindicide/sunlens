@@ -208,8 +208,8 @@ class ProfileTests : public QObject {
         const auto map = controller.servers()[0].toMap();
         QVERIFY(!map.contains("credential"));
         QVERIFY(!map.contains("url"));
-        controller.selectServer(map["id"].toString());
         QCOMPARE(controller.selectedId(), map["id"].toString());
+        QCOMPARE(controller.selectedLabel(), map["label"].toString());
         QVERIFY(!controller.importText(QString::fromUtf8(Vless) + "\ninvalid"));
         QCOMPARE(controller.servers().size(), 1);
         QVERIFY(controller.addManual("trojan", "manual.invalid", 443, "fixture-password", "", true,
@@ -220,14 +220,20 @@ class ProfileTests : public QObject {
         QTemporaryDir directory;
         ProfileRepository repository(directory.filePath("profiles.sqlite"));
         ApplicationController controller(repository);
-        controller.validateSelectedCore("/missing/core", false, true, true);
+        controller.validateSelectedCore("/missing/core", false, true, true, "1.1.1.1", 443, true,
+                                        "cloudflare-dns.com");
         QVERIFY(!controller.coreBusy());
         QVERIFY(controller.importText(QString::fromUtf8(Vless)));
-        controller.selectServer(controller.servers().first().toMap()["id"].toString());
-        controller.validateSelectedCore("/missing/core", false, true, true);
+        controller.validateSelectedCore("/missing/core", false, true, true, "1.1.1.1", 443, true,
+                                        "cloudflare-dns.com");
         QTRY_VERIFY(!controller.coreBusy());
         QVERIFY(!controller.coreStatus().isEmpty());
-        QCOMPARE(repository.preference("sing-box-path"), QStringLiteral("/missing/core"));
+        if (controller.usesInstalledCore()) {
+            QVERIFY(repository.preference("sing-box-path").isEmpty());
+            QVERIFY(controller.corePath() != "/missing/core");
+        } else {
+            QCOMPARE(repository.preference("sing-box-path"), QStringLiteral("/missing/core"));
+        }
     }
     void controllerUsesHelperWithoutInventingReachability() {
         QTemporaryDir directory;
@@ -239,7 +245,9 @@ class ProfileTests : public QObject {
         controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");
         QCOMPARE(observed->starts, 0);
         QVERIFY(controller.importText(QString::fromUtf8(Vless)));
-        controller.selectServer(controller.servers().first().toMap()["id"].toString());
+        QCOMPARE(observed->starts, 0);
+        QVERIFY(!controller.selectedId().isEmpty());
+        QCOMPARE(repository.preference("selected-server"), controller.selectedId());
         controller.startTunnel(0, true, true, "1.1.1.1", 443, true, "cloudflare-dns.com");
         QCOMPARE(observed->starts, 1);
         QCOMPARE(observed->request.serverId, controller.selectedId());

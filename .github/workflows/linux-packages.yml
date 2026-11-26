@@ -1,0 +1,74 @@
+name: Сборка пакетов Linux
+on:
+  workflow_call:
+    inputs:
+      release-candidate:
+        description: Выгрузить артефакты после прохождения проверок допуска к выпуску
+        type: boolean
+        default: false
+      private-preview:
+        description: Выгрузить установщики для закрытого тестирования
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  deb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Системные зависимости Ubuntu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window
+      - name: Сборка и проверка DEB
+        run: sh tools/build-linux-package.sh deb
+      - name: Установленный TUN и системный DNS в изолированном окружении
+        if: ${{ runner.environment == 'github-hosted' }}
+        run: |
+          sh tests/integration/linux-ci-installed.sh \
+            "$PWD/build/package-artifact/sunlens-$(cat VERSION)-linux-amd64.deb"
+      - name: Сохранение проверенного DEB
+        if: ${{ inputs.release-candidate || (inputs.private-preview && github.event.repository.private && vars.SUNLENS_PRIVATE_INSTALLERS == 'enabled') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sunlens-linux-deb
+          path: |
+            build/package-artifact/*.deb
+            build/package-artifact/*.deb.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  rpm:
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:44
+    timeout-minutes: 30
+    steps:
+      - name: Системные зависимости Fedora
+        run: |
+          dnf -y --setopt=install_weak_deps=False install \
+            ca-certificates git python3 cmake ninja-build gcc-c++ \
+            qt6-qtbase-devel qt6-qtdeclarative-devel rpm-build
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Сборка и проверка RPM
+        run: sh tools/build-linux-package.sh rpm
+      - name: Сохранение проверенного RPM
+        if: ${{ inputs.release-candidate || (inputs.private-preview && github.event.repository.private && vars.SUNLENS_PRIVATE_INSTALLERS == 'enabled') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sunlens-linux-rpm
+          path: |
+            build/package-artifact/*.rpm
+            build/package-artifact/*.rpm.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

@@ -23,6 +23,7 @@ class ApplicationController : public QObject {
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(bool coreBusy READ coreBusy NOTIFY coreInfoChanged)
     Q_PROPERTY(QString corePath READ corePath NOTIFY coreInfoChanged)
+    Q_PROPERTY(bool usesInstalledCore READ usesInstalledCore NOTIFY coreInfoChanged)
     Q_PROPERTY(QString coreStatus READ coreStatus NOTIFY coreInfoChanged)
     Q_PROPERTY(bool tunnelAvailable READ tunnelAvailable CONSTANT)
     Q_PROPERTY(QString tunnelState READ tunnelState NOTIFY tunnelChanged)
@@ -53,6 +54,7 @@ class ApplicationController : public QObject {
     [[nodiscard]] bool busy() const;
     [[nodiscard]] bool coreBusy() const;
     [[nodiscard]] QString corePath() const;
+    [[nodiscard]] bool usesInstalledCore() const;
     [[nodiscard]] QString coreStatus() const;
     [[nodiscard]] bool tunnelAvailable() const;
     [[nodiscard]] QString tunnelState() const;
@@ -81,7 +83,8 @@ class ApplicationController : public QObject {
     Q_INVOKABLE void selectServer(const QString& id);
     Q_INVOKABLE void renameServer(const QString& id, const QString& label);
     Q_INVOKABLE void validateSelectedCore(const QString& executable, bool direct, bool bypassLan,
-                                          bool ipv6);
+                                          bool ipv6, const QString& dnsAddress, int dnsPort,
+                                          bool dnsHttps, const QString& dnsTlsName);
     Q_INVOKABLE void startTunnel(int routing, bool bypassLan, bool ipv6, const QString& dnsAddress,
                                  int dnsPort, bool dnsHttps, const QString& dnsTlsName);
     Q_INVOKABLE void stopTunnel();
@@ -93,6 +96,7 @@ class ApplicationController : public QObject {
 
   signals:
     void profilesChanged();
+    void subscriptionImported();
     void messageChanged();
     void busyChanged();
     void coreInfoChanged();
@@ -122,7 +126,7 @@ class ApplicationController : public QObject {
     QFutureWatcher<ValidationResult> validation_;
     QString corePath_;
     QString selectedCore_ = QStringLiteral("sing-box");
-    QString coreStatus_ = QStringLiteral("Ядро ещё не проверено. TUN не реализован.");
+    QString coreStatus_ = QStringLiteral("Проверка конфигурации ещё не выполнялась.");
     bool coreBusy_ = false;
     std::unique_ptr<ITunnelClient> tunnel_;
     QString tunnelState_ = QStringLiteral("idle");
