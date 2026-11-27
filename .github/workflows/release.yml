@@ -1,21 +1,118 @@
-name: Release gates
+name: Preview packages
 on:
   push:
+    branches: [feat/proxy-preview]
     tags: ['v*']
+
 permissions:
   contents: read
+
 jobs:
   preflight:
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate tag before any release action
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify exact preview version and scope
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
         run: |
-          python3 - <<'PY'
-          import os, re
-          tag = os.environ["RELEASE_TAG"]
-          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?", tag):
-              raise SystemExit("Invalid SemVer tag")
-          raise SystemExit("Release blocked: license, installers and live TUN matrix are unverified. See docs/releasing.md.")
-          PY
+          test "$(cat VERSION)" = 0.1.1
+          case "$REF" in
+            refs/heads/feat/proxy-preview|refs/tags/v0.1.1) ;;
+            *) echo 'Only the approved 0.1.1 preview is enabled.' >&2; exit 1 ;;
+          esac
+          grep -Fxq 'Copyright (c) 2026 blindicide. All rights reserved.' LICENSE
+          python3 tools/check-repository.py
+
+  debian:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Ubuntu 24.04 build and runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++ qt6-base-dev qt6-declarative-dev \
+            libqt6svg6 qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs \
+            qml6-module-qtquick-layouts qml6-module-qtquick-templates qml6-module-qtquick-window \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript
+      - name: Build and package
+        run: |
+          cmake -S . -B build/deb -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/deb --parallel 2
+          ctest --test-dir build/deb --output-on-failure
+          bash packaging/build-deb.sh build/deb out
+      - name: Install, smoke test, and remove the package
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          sudo apt-get install -y ./out/sunlens_0.1.1_amd64.deb
+          test "$(/usr/bin/sunlens --version)" = 'SUNLENS 0.1.1'
+          timeout 20s /usr/bin/sunlens --smoke-test
+          sudo apt-get remove -y sunlens
+          test ! -e /usr/bin/sunlens
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.ref_type == 'tag'
+        with:
+          name: sunlens-deb
+          path: out/sunlens_0.1.1_amd64.deb
+          if-no-files-found: error
+          compression-level: 0
+
+  windows:
+    needs: preflight
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+      - name: Build and test Windows x64
+        run: |
+          cmake -S . -B build/win -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+          cmake --build build/win --config Release --parallel 2
+          ctest --test-dir build/win -C Release --output-on-failure
+      - name: Stage Qt and compile the installer
+        shell: pwsh
+        run: ./packaging/build-windows.ps1 -App build/win/Release/sunlens.exe -Stage build/windows-x64-preview -OutputDir out
+      - name: Install, smoke test, and remove the installer
+        shell: pwsh
+        run: ./packaging/test-windows.ps1 -Installer out/sunlens-0.1.1-windows-x64.exe -Fixture build/win/Release/proxy_tests.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.ref_type == 'tag'
+        with:
+          name: sunlens-exe
+          path: out/sunlens-0.1.1-windows-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    if: github.ref == 'refs/tags/v0.1.1'
+    needs: [debian, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: sunlens-*
+          path: out
+          merge-multiple: true
+      - name: Publish only after verifying both uploads on the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/publish-preview.sh

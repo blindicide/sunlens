@@ -15,6 +15,8 @@ endif()
 
 set(source "${CMAKE_CURRENT_LIST_DIR}/..")
 get_filename_component(stage "${STAGE}" ABSOLUTE)
+file(MAKE_DIRECTORY "${stage}")
+if(NOT QT_ONLY)
 set(downloads "${stage}/.downloads")
 set(core "${stage}/cores/sing-box")
 file(MAKE_DIRECTORY "${downloads}" "${core}")
@@ -39,6 +41,8 @@ file(COPY "${downloads}/sing-box/${sing_name}/sing-box.exe"
     "${downloads}/sing-box/${sing_name}/LICENSE" DESTINATION "${core}")
 file(COPY "${downloads}/wintun/wintun/bin/amd64/wintun.dll" DESTINATION "${core}")
 file(COPY_FILE "${downloads}/wintun/wintun/LICENSE.txt" "${core}/Wintun-LICENSE.txt")
+file(REMOVE_RECURSE "${downloads}")
+endif()
 file(COPY_FILE "${APP}" "${stage}/sunlens.exe")
 file(COPY "${source}/VERSION" "${source}/LICENSE" "${source}/third_party/NOTICE.md"
     DESTINATION "${stage}")
@@ -47,5 +51,4 @@ file(COPY "${source}/VERSION" "${source}/LICENSE" "${source}/third_party/NOTICE.
 execute_process(COMMAND "${WINDEPLOYQT}" --release --no-compiler-runtime
     --qmldir "${source}/qml" "${stage}/sunlens.exe" COMMAND_ERROR_IS_FATAL ANY)
 
-file(REMOVE_RECURSE "${downloads}")
 message(STATUS "Staged Windows x64 preview: ${stage}")
