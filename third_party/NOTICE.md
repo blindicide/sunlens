@@ -5,9 +5,9 @@
 | Qt 6 Core/Gui/Quick/QuickControls2/Network/Sql | Динамическая линковка | LGPLv3/GPLv3/commercial согласно конкретным модулям; проверить условия поставки |
 | Qt Test | Только тесты | Не включать в runtime-пакет |
 | SQLite через Qt SQL driver | Локальные данные | Проверить notices сборки driver |
-| sing-box | Будущий внешний процесс | Пока не включён; требуется проверка GPL и dependency notices |
+| [sing-box 1.14.5](https://github.com/SagerNet/sing-box/tree/v1.14.5) | Внешний процесс в папке Windows x64 | Копируется upstream LICENSE; до распространения проверить GPL и dependency notices (включая libcronet) |
 | Xray-core | Будущий внешний процесс | Пока не включён; требуется проверка MPL и dependency notices |
-| Wintun | Будущий Windows TUN | Пока не включён; проверить точную лицензию дистрибутива |
+| [Wintun 0.14.1](https://www.wintun.net/) | Подписанный x64 DLL рядом с sing-box | Копируется лицензия бинарного дистрибутива; проверить условия поставки |
 
 SVG в `assets/` созданы для SUNLENS; сторонние обложки/логотипы не используются.
 Это реестр незавершённой проверки, не утверждение о выполнении лицензионных

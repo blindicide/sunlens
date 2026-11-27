@@ -9,6 +9,11 @@ ctest --preset dev
 `app-version` проверяет runtime-версию, `gui-smoke` — загрузку QML в offscreen
 без изменения сети. Это не E2E-проверки VPN.
 
+`proxy-settings-and-probe` проверяет JSON и отправку HTTP CONNECT и SOCKS5
+локальным заглушкам без доступа к интернету. Windows CI дополнительно запускает
+`sing-box check` для обоих профилей и GUI из подготовленной папки без Qt в PATH.
+Это не проверяет соединение с реальным upstream или работу Wintun.
+
 Для каждого будущего релиза сохраняйте точный commit, версии ОС/Qt/ядер,
 вывод install/run/uninstall и результаты Windows/Linux × sing-box/Xray.
 Живая проверка должна наблюдать внешний интерфейс (DNS/IPv4/IPv6/TCP/UDP),
