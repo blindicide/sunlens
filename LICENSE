@@ -1,7 +1,10 @@
-License selection pending repository-owner approval.
+Copyright (c) 2026 blindicide. All rights reserved.
 
-No open-source license is granted by this placeholder. Do not publish a release
-or distribute SUNLENS binaries until the owner selects a license and the
-dependency distribution obligations have been reviewed.
+The owner grants permission to install and use the official SUNLENS binaries
+as distributed. No license to copy, modify, or redistribute SUNLENS source or
+binaries is granted, except where required by law or separately authorized.
 
-Third-party components retain their own licenses; see third_party/NOTICE.md.
+These terms do not apply to third-party components, which remain under their
+own licenses. In particular, nothing here restricts replacing LGPL-covered
+libraries with compatible modified versions or reverse engineering SUNLENS
+for debugging such modifications. See third_party/NOTICE.md.
