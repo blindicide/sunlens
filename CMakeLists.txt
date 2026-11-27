@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" SUNLENS_VERSION LIMIT_COUNT 1)
+set(version_file "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VERSION")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${version_file}")
+file(STRINGS "${version_file}" SUNLENS_VERSION LIMIT_COUNT 1)
 if(NOT SUNLENS_VERSION MATCHES "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")
     message(FATAL_ERROR "VERSION: требуется версия MAJOR.MINOR.PATCH")
 endif()
@@ -42,7 +44,7 @@ install(TARGETS sunlens RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES assets/sunlens.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 install(FILES assets/logo.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps"
     RENAME sunlens.svg)
-install(FILES VERSION LICENSE third_party/NOTICE.md
+install(FILES "${version_file}" LICENSE third_party/NOTICE.md
     DESTINATION "${CMAKE_INSTALL_DATADIR}/sunlens")
 
 if(BUILD_TESTING)

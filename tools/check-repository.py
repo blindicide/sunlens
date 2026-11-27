@@ -5,7 +5,7 @@ import re
 import subprocess
 
 root = pathlib.Path(__file__).resolve().parents[1]
-version = (root / "VERSION").read_text(encoding="utf-8").strip()
+version = (root / "cmake" / "VERSION").read_text(encoding="utf-8").strip()
 if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
     raise SystemExit("Некорректная версия")
 files = subprocess.check_output(

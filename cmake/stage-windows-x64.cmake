@@ -44,7 +44,7 @@ file(COPY_FILE "${downloads}/wintun/wintun/LICENSE.txt" "${core}/Wintun-LICENSE.
 file(REMOVE_RECURSE "${downloads}")
 endif()
 file(COPY_FILE "${APP}" "${stage}/sunlens.exe")
-file(COPY "${source}/VERSION" "${source}/LICENSE" "${source}/third_party/NOTICE.md"
+file(COPY "${source}/cmake/VERSION" "${source}/LICENSE" "${source}/third_party/NOTICE.md"
     DESTINATION "${stage}")
 
 # Use the separately installed official x64 VC++ Redistributable.

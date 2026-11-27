@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repo = Split-Path -Parent $PSScriptRoot
-$version = (Get-Content -Raw (Join-Path $repo 'VERSION')).Trim()
+$version = (Get-Content -Raw (Join-Path $repo 'cmake/VERSION')).Trim()
 $App = (Resolve-Path -LiteralPath $App).Path
 $stagePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Stage)
 $null = New-Item -ItemType Directory -Force -Path $OutputDir

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version=$(<VERSION)
+version=$(<cmake/VERSION)
 tag="v$version"
 [[ $tag == v0.1.1 && ${GITHUB_REF:-} == "refs/tags/$tag" ]]
 notes=$(mktemp)

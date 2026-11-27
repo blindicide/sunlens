@@ -9,7 +9,7 @@ if [[ $# != 2 ]] || [[ $(dpkg --print-architecture) != amd64 ]]; then
 fi
 
 source_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
-version=$(<"$source_dir/VERSION")
+version=$(<"$source_dir/cmake/VERSION")
 [[ $version =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 mkdir -p -- "$2"
 output="$2/sunlens_${version}_amd64.deb"

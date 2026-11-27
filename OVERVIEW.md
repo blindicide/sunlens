@@ -19,7 +19,7 @@ QML → ApplicationController → ProfileRepository / SubscriptionManager
 - `src/app/main.cpp` — запуск Qt, версия, проверка загрузки QML.
 - `qml/Main.qml` — интерфейс и явное состояние недоступности TUN.
 - `assets/` — исходные SVG и desktop entry.
-- `cmake/version.hpp.in` — версия из единственного источника `VERSION`.
+- `cmake/version.hpp.in` — версия из единственного источника `cmake/VERSION`.
 - `tests/` — автоматические проверки по мере реализации.
 - `docs/` — архитектура, совместимость, сборка и контроль выпуска.
 - `.github/workflows/` — CI и блокировка неподтверждённого выпуска.
