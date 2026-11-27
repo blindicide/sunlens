@@ -1,3 +1,4 @@
+#include "proxy.hpp"
 #include "sunlens/version.hpp"
 
 #include <QCommandLineParser>
@@ -20,8 +21,10 @@ int main(int argc, char* argv[]) {
                       QStringLiteral("Проверить загрузку интерфейса без изменения сети.")});
     parser.process(app);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
+    sunlens::ProxyController proxy;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("appVersion"), sunlens::Version);
+    engine.rootContext()->setContextProperty(QStringLiteral("proxyController"), &proxy);
     engine.load(QUrl(QStringLiteral("qrc:/qt/qml/Sunlens/qml/Main.qml")));
     if (engine.rootObjects().isEmpty())
         return 1;
