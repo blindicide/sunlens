@@ -3,15 +3,27 @@ param([Parameter(Mandatory = $true)][string] $Destination)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $scratch = Join-Path (Split-Path -Parent $PSCommandPath) 'core-downloads'
 
 function Receive-Archive($Url, $ExpectedHash, $Name) {
     $zip = Join-Path $scratch "$Name.zip"
     Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $zip -TimeoutSec 120
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash -ne $ExpectedHash) {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($zip)
+        try {
+            $actualHash = [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '')
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $sha256.Dispose()
+    }
+    if ($actualHash -ne $ExpectedHash) {
         throw "SHA-256 mismatch: $Name"
     }
-    Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $scratch $Name)
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $scratch $Name))
 }
 
 try {
