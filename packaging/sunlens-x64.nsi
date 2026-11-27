@@ -29,6 +29,7 @@ Section "SUNLENS"
     SetOutPath "$PLUGINSDIR"
     File /oname=vc_redist.x64.exe "${VCREDIST}"
     File "${__FILEDIR__}\install-core.ps1"
+    StrCpy $1 "Could not start the Microsoft Visual C++ Redistributable."
     ClearErrors
     ExecWait '"$PLUGINSDIR\vc_redist.x64.exe" /install /quiet /norestart' $0
     IfErrors setupFailed
@@ -36,22 +37,27 @@ Section "SUNLENS"
         SetRebootFlag true
     ${ElseIf} $0 != 0
     ${AndIf} $0 != 1638 ; a newer runtime is already installed
-        SetErrorLevel 1
-        Abort "Microsoft Visual C++ runtime setup failed ($0)."
+    ${AndIf} $0 != -2147023258 ; the same error wrapped as HRESULT 0x80070666
+        StrCpy $1 "Microsoft Visual C++ Redistributable returned $0."
+        Goto setupFailed
     ${EndIf}
 
     DetailPrint "Downloading and verifying sing-box and Wintun (internet required)"
-    ClearErrors
-    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\install-core.ps1" -Destination "$PLUGINSDIR\core"' $0
-    IfErrors setupFailed
-    ${If} $0 != 0
+    nsExec::ExecToStack /TIMEOUT=300000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$PLUGINSDIR\install-core.ps1" -Destination "$PLUGINSDIR\core"'
+    Pop $0
+    Pop $1
+    ${If} $0 != "0"
+        StrCpy $1 "Could not download verified networking components ($0): $1"
         Goto setupFailed
     ${EndIf}
 
     SetOutPath "$INSTDIR\app"
     File /r /x cores "${STAGE}\*"
     SetOutPath "$INSTDIR\app\cores\sing-box"
+    StrCpy $1 "Could not install the downloaded networking components."
+    ClearErrors
     CopyFiles /SILENT "$PLUGINSDIR\core\*.*" "$OUTDIR"
+    IfErrors setupFailed
     SetOutPath "$INSTDIR\app"
     WriteUninstaller "$INSTDIR\uninstall.exe"
     CreateShortCut "$SMPROGRAMS\SUNLENS.lnk" "$INSTDIR\app\sunlens.exe"
@@ -63,9 +69,15 @@ Section "SUNLENS"
     WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
     Goto done
     setupFailed:
+        ; Fixed protected path so silent setup failures can be diagnosed too.
+        CreateDirectory "$INSTDIR"
+        FileOpen $2 "$INSTDIR\setup-error.log" w
+        FileWrite $2 "$1$\r$\n"
+        FileClose $2
         SetErrorLevel 1
-        Abort "Could not set up the runtime or download verified networking components. Check the internet connection and retry."
+        Abort "$1"
     done:
+        Delete "$INSTDIR\setup-error.log"
 SectionEnd
 
 Function un.onInit
@@ -80,6 +92,7 @@ Section "Uninstall"
     Delete "$SMPROGRAMS\SUNLENS.lnk"
     DeleteRegKey HKLM "${UNINSTALL_KEY}"
     RMDir /r "$INSTDIR\app"
+    Delete "$INSTDIR\setup-error.log"
     Delete "$INSTDIR\uninstall.exe"
     RMDir "$INSTDIR"
 SectionEnd

@@ -19,7 +19,13 @@ $uninstaller = Join-Path $target 'uninstall.exe'
 $app = Join-Path $target 'app/sunlens.exe'
 $core = Join-Path $target 'app/cores/sing-box'
 try {
-    Invoke-Process $installerPath '/S' @(0, 3010)
+    try {
+        Invoke-Process $installerPath '/S' @(0, 3010)
+    } catch {
+        $setupLog = Join-Path $target 'setup-error.log'
+        if (Test-Path -LiteralPath $setupLog) { Write-Host (Get-Content -Raw -LiteralPath $setupLog) }
+        throw
+    }
     foreach ($file in @($app, (Join-Path $core 'sing-box.exe'), (Join-Path $core 'wintun.dll'))) {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing installed file: $file" }
     }
